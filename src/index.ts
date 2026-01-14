@@ -11,4 +11,4 @@
 export { PuterAuthPlugin } from './plugin.js';
 export { PuterClient } from './client.js';
 export { PuterAuthManager } from './auth.js';
-export type { PuterConfig, PuterAccount, PuterChatOptions, PuterChatResponse } from './types.js';
+export type { PuterConfig, PuterAccount, PuterChatOptions, PuterChatResponse, PuterChatMessage, PuterChatStreamChunk, PuterModelInfo } from './types.js';
