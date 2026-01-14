@@ -70,6 +70,6 @@
   "dependencies": {
     "open": "^10.1.0",
     "xdg-basedir": "^5.1.0",
-    "zod": "^3.24.0"
+    "zod": "^4.3.5"
   }
 }
