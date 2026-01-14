@@ -1,0 +1,22 @@
+{
+  "projectName": "opencode-puter-auth",
+  "projectOwner": "chindris-mihai-alexandru",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": ["README.md"],
+  "imageSize": 100,
+  "commit": true,
+  "commitConvention": "angular",
+  "contributorsPerLine": 7,
+  "linkToUsage": true,
+  "skipCi": true,
+  "contributors": [
+    {
+      "login": "chindris-mihai-alexandru",
+      "name": "Mihai Chindris",
+      "avatar_url": "https://avatars.githubusercontent.com/u/chindris-mihai-alexandru",
+      "profile": "https://github.com/chindris-mihai-alexandru",
+      "contributions": ["code", "doc", "maintenance", "ideas"]
+    }
+  ]
+}
