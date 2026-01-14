@@ -24,7 +24,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           path-to-signatures: 'signatures/cla.json'
-          path-to-document: 'https://gist.github.com/chindris-mihai-alexandru/CLA_opencode_puter_auth'
+          path-to-document: 'https://gist.github.com/chindris-mihai-alexandru/387b59194e60dea31b4addac83a28f51'
           branch: 'main'
           # Allow bots and the repo owner
           allowlist: 'bot*,dependabot[bot],chindris-mihai-alexandru'
