@@ -69,6 +69,14 @@ jobs:
           if [ "$CURRENT_VERSION" != "$NPM_VERSION" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
             echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            # Check if this is a prerelease version (contains -)
+            if [[ "$CURRENT_VERSION" == *"-"* ]]; then
+              # Extract the prerelease tag (beta, alpha, rc, etc.)
+              PRERELEASE_TAG=$(echo "$CURRENT_VERSION" | sed 's/.*-\([a-zA-Z]*\).*/\1/')
+              echo "tag=$PRERELEASE_TAG" >> $GITHUB_OUTPUT
+            else
+              echo "tag=latest" >> $GITHUB_OUTPUT
+            fi
           fi
       
       # Update npm for Trusted Publishing support (requires npm v11.5.1+)
@@ -78,4 +86,4 @@ jobs:
       
       - name: Publish to npm with provenance
         if: steps.version.outputs.changed == 'true'
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --tag ${{ steps.version.outputs.tag }}
