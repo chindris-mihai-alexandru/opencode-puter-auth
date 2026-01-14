@@ -1,0 +1,75 @@
+{
+  "name": "opencode-puter-auth",
+  "version": "1.0.0-beta.1",
+  "description": "Puter.com OAuth auth plugin for OpenCode - FREE UNLIMITED access to Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, and 500+ AI models",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "license": "MIT",
+  "author": "chindris-mihai-alexandru",
+  "funding": {
+    "type": "ko-fi",
+    "url": "https://ko-fi.com/chindrismihai"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chindris-mihai-alexandru/opencode-puter-auth.git"
+  },
+  "homepage": "https://github.com/chindris-mihai-alexandru/opencode-puter-auth#readme",
+  "bugs": {
+    "url": "https://github.com/chindris-mihai-alexandru/opencode-puter-auth/issues"
+  },
+  "keywords": [
+    "opencode",
+    "puter",
+    "claude",
+    "opus",
+    "sonnet",
+    "anthropic",
+    "gpt",
+    "openai",
+    "gemini",
+    "free",
+    "unlimited",
+    "oauth",
+    "plugin",
+    "auth",
+    "ai",
+    "coding",
+    "llm"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build",
+    "dev": "tsc -p tsconfig.build.json --watch"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^0.15.30",
+    "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^3.0.0",
+    "@vitest/ui": "^3.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "open": "^10.1.0",
+    "xdg-basedir": "^5.1.0",
+    "zod": "^3.24.0"
+  }
+}
