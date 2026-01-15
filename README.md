@@ -1,7 +1,7 @@
 # opencode-puter-auth
 
 [![npm version](https://img.shields.io/npm/v/opencode-puter-auth.svg)](https://www.npmjs.com/package/opencode-puter-auth)
-[![npm beta](https://img.shields.io/npm/v/opencode-puter-auth/beta.svg)](https://www.npmjs.com/package/opencode-puter-auth)
+[![CI](https://github.com/Mihai-Codes/opencode-puter-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/Mihai-Codes/opencode-puter-auth/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/chindrismihai)
 
@@ -49,7 +49,7 @@ https://raw.githubusercontent.com/Mihai-Codes/opencode-puter-auth/main/README.md
 
 ```json
 {
-  "plugin": ["opencode-puter-auth@beta"]
+  "plugin": ["opencode-puter-auth"]
 }
 ```
 
@@ -65,7 +65,7 @@ opencode auth login
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-puter-auth@beta"],
+  "plugin": ["opencode-puter-auth"],
   "provider": {
     "puter": {
       "models": {

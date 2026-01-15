@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question / Discussion
+    url: https://github.com/Mihai-Codes/opencode-puter-auth/discussions
+    about: Ask questions and discuss ideas in GitHub Discussions
+  - name: Puter.com Documentation
+    url: https://docs.puter.com
+    about: Learn more about Puter.com's AI API
+  - name: OpenCode Documentation
+    url: https://opencode.ai/docs
+    about: Learn more about OpenCode plugins
