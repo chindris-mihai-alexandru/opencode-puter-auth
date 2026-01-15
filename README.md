@@ -53,14 +53,17 @@ https://raw.githubusercontent.com/Mihai-Codes/opencode-puter-auth/main/README.md
 }
 ```
 
-2. **Authenticate with Puter (Manual Setup):**
-
-Since OpenCode's plugin auth system is still being integrated, use manual authentication:
+2. **Authenticate with Puter:**
 
 ```bash
-# The plugin will auto-create a temp account on first use
-# Or manually authenticate:
-node -e "const {PuterAuthManager}=require('opencode-puter-auth');const m=new PuterAuthManager(require('os').homedir()+'/.config/opencode');m.init().then(()=>m.login())"
+# Install plugin globally to get CLI tool
+npm install -g opencode-puter-auth
+
+# Run authentication
+puter-auth
+
+# Or from project directory
+cd ~/.config/opencode && npx opencode-puter-auth
 ```
 
 3. **Add model definitions:**
