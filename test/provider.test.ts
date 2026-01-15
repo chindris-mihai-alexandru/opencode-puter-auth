@@ -23,12 +23,12 @@ describe('Provider', () => {
       expect(isPuterRequest(url)).toBe(true);
     });
 
-    it('should detect puter.local URL', () => {
-      expect(isPuterRequest('https://puter.local/v1/models/claude-opus-4-5:generateContent')).toBe(true);
+    it('should detect localhost:8080 URL', () => {
+      expect(isPuterRequest('http://localhost:8080/v1/models/claude-opus-4-5:generateContent')).toBe(true);
     });
 
-    it('should detect puter.local with path', () => {
-      expect(isPuterRequest('https://puter.local/v1/chat/completions')).toBe(true);
+    it('should detect localhost:8080 with path', () => {
+      expect(isPuterRequest('http://localhost:8080/v1/chat/completions')).toBe(true);
     });
 
     it('should not detect non-puter URLs', () => {

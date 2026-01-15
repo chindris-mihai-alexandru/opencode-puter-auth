@@ -22,7 +22,7 @@ const PUTER_API_URL = 'https://api.puter.com';
 const PUTER_MODEL_PREFIX = 'puter-';
 
 // Fake Puter API endpoint that we intercept
-const PUTER_LOCAL_API = 'puter.local';
+const PUTER_LOCAL_API = 'localhost:8080';
 
 /**
  * Check if a request is targeting the Puter provider
@@ -30,7 +30,7 @@ const PUTER_LOCAL_API = 'puter.local';
 export function isPuterRequest(input: RequestInfo | URL): boolean {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
   
-  // Check for puter.local fake endpoint (OpenAI-compatible format)
+  // Check for localhost:8080 fake endpoint (OpenAI-compatible format)
   if (url.includes(PUTER_LOCAL_API)) {
     return true;
   }

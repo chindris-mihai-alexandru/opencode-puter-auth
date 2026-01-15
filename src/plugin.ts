@@ -108,10 +108,10 @@ export const PuterAuthPlugin: Plugin = async (_input: PluginInput): Promise<Hook
           
           // Return custom fetch function that intercepts and transforms requests
           // This enables Puter to work as a provider in OpenCode's model picker
-          // Using OpenAI-compatible format with custom fetch for translation
+          // Using localhost as fake baseURL that gets intercepted by custom fetch
           return {
-            apiKey: '',  // Auth handled via custom fetch
-            baseURL: 'https://puter.local',  // Fake URL intercepted by custom fetch
+            apiKey: account.authToken,  // Real auth token for debugging
+            baseURL: 'http://localhost:8080',  // Fake localhost URL intercepted by custom fetch
             fetch: createPuterFetch(account.authToken, pluginConfig),
           };
         }
