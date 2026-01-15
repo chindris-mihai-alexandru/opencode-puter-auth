@@ -7,8 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-01-15
+
+### 🎉 First Stable Release!
+
+This marks the first stable release of opencode-puter-auth, providing FREE, UNLIMITED access to Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, and 500+ AI models through Puter.com.
+
 ### Added
-- Integration test setup for Puter API (coming soon)
+- **Integration tests** with MSW (Mock Service Worker) for API mocking
+  - 15 new integration tests covering chat, streaming, errors, and model listing
+  - Now 39 total tests (24 unit + 15 integration)
+- **Error handling examples** (`examples/error-handling.ts`)
+  - Exponential backoff retry logic
+  - Streaming error recovery with fallback
+  - Model fallback chain
+  - Token expiry handling
+
+### Changed
+- Promoted from beta to stable release
+- Total test count: 24 → 39 tests
+
+### Technical
+- Added MSW ^2.12.7 as dev dependency for API mocking
 
 ## [1.0.0-beta.5] - 2026-01-15
 
@@ -81,7 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial project setup
 - Basic project structure
 
-[Unreleased]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.5...HEAD
+[Unreleased]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.5...v1.0.0
 [1.0.0-beta.5]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.3...v1.0.0-beta.4
 [1.0.0-beta.3]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.2...v1.0.0-beta.3
