@@ -8,7 +8,11 @@
  * @license MIT
  */
 
+// Named export - the plugin function for OpenCode
+// IMPORTANT: Only export the plugin function, not classes!
+// OpenCode's plugin loader calls all exports as functions, so exporting
+// classes (PuterClient, PuterAuthManager) causes "cannot call class without new" errors.
 export { PuterAuthPlugin } from './plugin.js';
-export { PuterClient } from './client.js';
-export { PuterAuthManager } from './auth.js';
+
+// Type exports for TypeScript users (these don't cause runtime issues)
 export type { PuterConfig, PuterAccount, PuterChatOptions, PuterChatResponse, PuterChatMessage, PuterChatStreamChunk, PuterModelInfo } from './types.js';

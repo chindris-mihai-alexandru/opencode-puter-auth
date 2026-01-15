@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-01-15
+
+### Fixed
+- **Critical**: Fixed plugin load error "Cannot call a class constructor without new"
+  - OpenCode's plugin loader iterates all exports and calls them as functions
+  - Removed `PuterClient` and `PuterAuthManager` class exports from index.ts
+  - Now only exports the `PuterAuthPlugin` function (matching antigravity plugin pattern)
+  - Classes are still usable internally but not exposed via package exports
+
+### Changed
+- Removed default export from plugin.ts (only named export `PuterAuthPlugin` now)
+
 ## [1.0.0] - 2026-01-15
 
 ### 🎉 First Stable Release!
@@ -101,7 +113,8 @@ This marks the first stable release of opencode-puter-auth, providing FREE, UNLI
 - Initial project setup
 - Basic project structure
 
-[Unreleased]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.5...v1.0.0
 [1.0.0-beta.5]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.4...v1.0.0-beta.5
 [1.0.0-beta.4]: https://github.com/Mihai-Codes/opencode-puter-auth/compare/v1.0.0-beta.3...v1.0.0-beta.4

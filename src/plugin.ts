@@ -347,5 +347,4 @@ export const PuterAuthPlugin: Plugin = async (_input: PluginInput): Promise<Hook
   };
 };
 
-// Default export for OpenCode
-export default PuterAuthPlugin;
+
