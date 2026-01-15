@@ -17,6 +17,23 @@ export const PuterAuthPlugin = async (_ctx: any) => {
   console.log("Puter Auth Plugin initialized!");
   
   return {
+    // Auth provider - handles OAuth flow
+    'auth.provider': {
+      puter: {
+        name: 'Puter.com (FREE Unlimited)',
+        type: 'oauth' as const,
+        async login() {
+          const configDir = getConfigDir();
+          const authManager = new PuterAuthManager(configDir);
+          await authManager.init();
+          const result = await authManager.login();
+          if (!result.success) {
+            throw new Error(result.error || 'Authentication failed');
+          }
+          return { success: true };
+        }
+      }
+    },
     // Auth loader - returns custom fetch for AI SDK provider
     'auth.loader': {
       puter: async () => {
