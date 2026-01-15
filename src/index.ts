@@ -14,6 +14,9 @@
 // classes (PuterClient, PuterAuthManager) causes "cannot call class without new" errors.
 export { PuterAuthPlugin } from './plugin-minimal.js';
 
+// Default export for OpenCode plugin loader
+export { PuterAuthPlugin as default } from './plugin-minimal.js';
+
 // AI SDK Provider exports - temporarily disabled for plugin loading issues
 // export { createPuter } from './ai-provider/index.js';
 // export type { PuterProvider, PuterChatSettings, PuterProviderConfig, PuterChatConfig } from './ai-provider/index.js';
