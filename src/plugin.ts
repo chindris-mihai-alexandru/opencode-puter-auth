@@ -16,6 +16,7 @@ import http from 'node:http';
 import { URL } from 'node:url';
 import { PuterClient } from './client.js';
 import { PuterAuthManager } from './auth.js';
+import { createPuterFetch } from './provider.js';
 import type { PuterConfig, PuterChatMessage, PuterAccount } from './types.js';
 import { PuterConfigSchema } from './types.js';
 
@@ -88,16 +89,30 @@ export const PuterAuthPlugin: Plugin = async (_input: PluginInput): Promise<Hook
     // AUTH HOOK - OAuth with Puter
     // ========================================
     auth: {
+      // Use 'puter' as a standalone provider
+      // This registers Puter as its own provider in OpenCode's model picker
+      // The custom fetch intercepts all requests and routes them to Puter's API
+      // with proper request/response translation (OpenAI-compatible format)
       provider: 'puter',
       
       // Load auth credentials for Puter provider
-      async loader(_auth, _provider) {
+      async loader(_auth, provider) {
         const account = authManager?.getActiveAccount();
         if (account) {
+          // Set all Puter models as FREE (cost = 0)
+          if (provider?.models) {
+            for (const model of Object.values(provider.models)) {
+              (model as any).cost = { input: 0, output: 0, cache: { read: 0, write: 0 } };
+            }
+          }
+          
+          // Return custom fetch function that intercepts and transforms requests
+          // This enables Puter to work as a provider in OpenCode's model picker
+          // Using OpenAI-compatible format with custom fetch for translation
           return {
-            key: account.authToken,
-            username: account.username,
-            email: account.email,
+            apiKey: '',  // Auth handled via custom fetch
+            baseURL: 'https://puter.local',  // Fake URL intercepted by custom fetch
+            fetch: createPuterFetch(account.authToken, pluginConfig),
           };
         }
         return {};

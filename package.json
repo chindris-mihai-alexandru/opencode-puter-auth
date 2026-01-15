@@ -69,6 +69,8 @@
     "vitest": "^4.0.0"
   },
   "dependencies": {
+    "@ai-sdk/provider": "^3.0.3",
+    "@ai-sdk/provider-utils": "^4.0.7",
     "open": "^11.0.0",
     "xdg-basedir": "^5.1.0",
     "zod": "^4.3.5"

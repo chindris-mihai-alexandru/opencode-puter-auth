@@ -14,12 +14,34 @@
  * 
  * 2. Add to your opencode.json configuration:
  *    {
- *      "plugins": ["opencode-puter-auth"]
+ *      "plugins": ["opencode-puter-auth"],
+ *      "provider": {
+ *        "puter": {
+ *          "models": {
+ *            "claude-opus-4-5": {
+ *              "name": "Claude Opus 4.5 (FREE via Puter)",
+ *              "limit": { "context": 200000, "output": 64000 }
+ *            },
+ *            "claude-sonnet-4-5": {
+ *              "name": "Claude Sonnet 4.5 (FREE via Puter)",
+ *              "limit": { "context": 200000, "output": 64000 }
+ *            },
+ *            "gpt-4o": {
+ *              "name": "GPT-4o (FREE via Puter)",
+ *              "limit": { "context": 128000, "output": 16384 }
+ *            },
+ *            "gemini-2.5-pro": {
+ *              "name": "Gemini 2.5 Pro (FREE via Puter)",
+ *              "limit": { "context": 1000000, "output": 65536 }
+ *            }
+ *          }
+ *        }
+ *      }
  *    }
  * 
  * 3. Start OpenCode and authenticate:
  *    opencode auth login
- *    (Select "Puter" as the provider)
+ *    (Select "Puter.com (FREE Unlimited AI)" as the provider)
  * 
  * 4. A browser window opens - sign in with your Puter account
  * 
@@ -27,7 +49,7 @@
  *    - Claude Opus 4.5, Sonnet 4.5, Haiku
  *    - GPT-5, GPT-5 Nano
  *    - Gemini models
- *    - 500+ other AI models via OpenRouter
+ *    - 500+ other AI models via Puter
  * 
  * 
  * CUSTOM TOOLS PROVIDED

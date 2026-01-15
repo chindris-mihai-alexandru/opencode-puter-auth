@@ -153,6 +153,32 @@ opencode run "Hello" --model=puter/claude-opus-4-5
 | `puter/gemini-2.5-pro` | Best Gemini | 1M | Huge context |
 | `puter/gemini-2.5-flash` | Fast Gemini | 1M | Quick analysis |
 
+## AI SDK Provider (Standalone Usage)
+
+You can also use the Puter AI SDK provider directly in your own applications:
+
+```typescript
+import { createPuter } from 'opencode-puter-auth';
+
+// Create a Puter provider instance
+const puter = createPuter({
+  authToken: 'your-puter-auth-token',
+});
+
+// Use with AI SDK
+const model = puter('claude-opus-4-5');
+
+// Or use specific methods
+const chatModel = puter.chat('claude-sonnet-4-5');
+const languageModel = puter.languageModel('gpt-4o');
+```
+
+This implements the full AI SDK v3 specification with:
+- Non-streaming and streaming generation
+- Tool/function calling support
+- Reasoning/thinking token support
+- Proper finish reason mapping
+
 ## Configuration
 
 Create `~/.config/opencode/puter.json` for advanced settings:

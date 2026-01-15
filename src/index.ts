@@ -14,5 +14,13 @@
 // classes (PuterClient, PuterAuthManager) causes "cannot call class without new" errors.
 export { PuterAuthPlugin } from './plugin.js';
 
+// AI SDK Provider exports
+// These enable Puter to work as a proper AI SDK provider
+export { createPuter, puter } from './ai-provider/index.js';
+export type { PuterProvider } from './ai-provider/index.js';
+export { PuterChatLanguageModel } from './ai-provider/index.js';
+export type { PuterChatSettings, PuterProviderConfig, PuterChatConfig } from './ai-provider/index.js';
+
 // Type exports for TypeScript users (these don't cause runtime issues)
 export type { PuterConfig, PuterAccount, PuterChatOptions, PuterChatResponse, PuterChatMessage, PuterChatStreamChunk, PuterModelInfo } from './types.js';
+
