@@ -88,10 +88,11 @@ export function createPuter(options: PuterProviderConfig = {}): PuterProvider {
       const fs = await import('fs/promises');
       
       const configDir = path.join(os.homedir(), '.config', 'opencode');
-      const authFile = path.join(configDir, 'puter-auth.json');
+      const authFile = path.join(configDir, 'puter-accounts.json');
       
       const authData = JSON.parse(await fs.readFile(authFile, 'utf-8'));
-      return authData.activeAccount?.authToken;
+      const activeAccount = authData.accounts?.[authData.activeIndex];
+      return activeAccount?.authToken;
     } catch {
       return undefined;
     }
