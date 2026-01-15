@@ -14,12 +14,15 @@ function getConfigDir(): string {
 
 // OpenCode plugin function - async with context parameter
 export const PuterAuthPlugin = async (_ctx: any) => {
-  console.log("Puter Auth Plugin initialized!");
+  console.log("[PUTER] Plugin initialized!");
+  console.log("[PUTER] Registering auth provider: puter");
+  console.log("[PUTER] Registering OAuth method: Puter.com (FREE Unlimited)");
   
   return {
     auth: {
       provider: 'puter',
       loader: async (_getAuth: any) => {
+        console.log("[PUTER] Auth loader called");
         const configDir = getConfigDir();
         const authManager = new PuterAuthManager(configDir);
         await authManager.init();
@@ -126,7 +129,8 @@ export const PuterAuthPlugin = async (_ctx: any) => {
       {
         label: 'Puter.com (FREE Unlimited)',
         type: 'oauth' as const,
-        authorize: async () => {
+        authorize: async (inputs?: Record<string, string>) => {
+          console.log("[PUTER] Authorize called with inputs:", inputs);
           const configDir = getConfigDir();
           const authManager = new PuterAuthManager(configDir);
           await authManager.init();
