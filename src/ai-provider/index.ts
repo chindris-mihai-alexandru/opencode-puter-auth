@@ -22,14 +22,11 @@
  * ```
  */
 
-// Provider exports
-export { createPuter, puter } from './puter-provider.js';
+// Provider exports - only export factory functions, not default instances
+export { createPuter } from './puter-provider.js';
 export type { PuterProvider } from './puter-provider.js';
 
-// Model exports
-export { PuterChatLanguageModel } from './puter-chat-language-model.js';
-
-// Settings exports
+// Settings exports - only types, no classes
 export type {
   PuterChatSettings,
   PuterProviderConfig,

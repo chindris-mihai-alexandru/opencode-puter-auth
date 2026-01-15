@@ -168,10 +168,21 @@ function getPuterInstance(): PuterProvider {
   if (!_puterInstance) {
     const authToken = process.env.PUTER_AUTH_TOKEN;
     if (!authToken) {
-      throw new Error(
-        'PUTER_AUTH_TOKEN environment variable is required for the default puter provider. ' +
-        'Either set the environment variable or use createPuter() with an explicit authToken.'
-      );
+      // Return a dummy provider that throws helpful errors
+      return {
+        languageModel: () => {
+          throw new Error(
+            'PUTER_AUTH_TOKEN environment variable is required for the default puter provider. ' +
+            'Either set the environment variable or use createPuter() with an explicit authToken.'
+          );
+        },
+        chat: () => {
+          throw new Error(
+            'PUTER_AUTH_TOKEN environment variable is required for the default puter provider. ' +
+            'Either set the environment variable or use createPuter() with an explicit authToken.'
+          );
+        }
+      } as any;
     }
     _puterInstance = createPuter({ authToken });
   }

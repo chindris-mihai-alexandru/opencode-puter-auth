@@ -1,0 +1,30 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-puter-auth"],
+  "provider": {
+    "puter": {
+      "models": {
+        "claude-opus-4-5": {
+          "name": "Claude Opus 4.5 (FREE via Puter)",
+          "limit": { "context": 200000, "output": 64000 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+        },
+        "claude-sonnet-4-5": {
+          "name": "Claude Sonnet 4.5 (FREE via Puter)",
+          "limit": { "context": 200000, "output": 64000 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+        },
+        "gpt-4o": {
+          "name": "GPT-4o (FREE via Puter)",
+          "limit": { "context": 128000, "output": 16384 },
+          "modalities": { "input": ["text", "image"], "output": ["text"] }
+        },
+        "gemini-2.5-pro": {
+          "name": "Gemini 2.5 Pro (FREE via Puter - 1M Context)",
+          "limit": { "context": 1000000, "output": 65536 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+        }
+      }
+    }
+  }
+}
