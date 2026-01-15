@@ -24,6 +24,8 @@
 
 // Provider exports - only export factory functions, not default instances
 export { createPuter } from './puter-provider.js';
+// Alias for OpenCode compatibility (expects createOpenAICompatible pattern)
+export { createPuter as default } from './puter-provider.js';
 export type { PuterProvider } from './puter-provider.js';
 
 // Model exports
