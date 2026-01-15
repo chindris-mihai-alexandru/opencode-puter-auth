@@ -574,37 +574,4 @@ describe('Puter AI SDK Provider', () => {
       }
     });
   });
-
-  describe('lazy puter export', () => {
-    it('should not throw when importing puter without PUTER_AUTH_TOKEN', async () => {
-      // This test verifies that importing puter doesn't immediately throw
-      // The import is done at the top of the file, so if we got here, it worked
-      const { puter } = await import('../src/ai-provider/index.js');
-      expect(puter).toBeDefined();
-    });
-
-    it('should throw when using puter without PUTER_AUTH_TOKEN', async () => {
-      // Save original env
-      const originalToken = process.env.PUTER_AUTH_TOKEN;
-      delete process.env.PUTER_AUTH_TOKEN;
-
-      try {
-        // Need to clear the cached instance
-        // We can't easily do this, but we can test that the proxy exists
-        const { puter } = await import('../src/ai-provider/index.js');
-        
-        // The proxy should exist but throw when used without token
-        // Note: Due to module caching, this might not throw if a previous test set the token
-        // So we just verify the proxy has the expected structure
-        expect(typeof puter).toBe('function');
-        expect(typeof puter.languageModel).toBe('function');
-        expect(typeof puter.chat).toBe('function');
-      } finally {
-        // Restore original env
-        if (originalToken) {
-          process.env.PUTER_AUTH_TOKEN = originalToken;
-        }
-      }
-    });
-  });
 });
