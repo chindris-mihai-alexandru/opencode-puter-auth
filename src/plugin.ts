@@ -89,29 +89,30 @@ export const PuterAuthPlugin: Plugin = async (_input: PluginInput): Promise<Hook
     // AUTH HOOK - OAuth with Puter
     // ========================================
     auth: {
-      // Use 'puter' as a standalone provider
-      // This registers Puter as its own provider in OpenCode's model picker
-      // The custom fetch intercepts all requests and routes them to Puter's API
-      // with proper request/response translation (OpenAI-compatible format)
-      provider: 'puter',
+      // Use 'google' provider - OpenCode knows how to instantiate it
+      // Models are defined with 'puter-' prefix under provider.google.models
+      // The custom fetch intercepts requests for puter-* models and routes to Puter API
+      // This is the same pattern used by opencode-antigravity-auth
+      provider: 'google',
       
       // Load auth credentials for Puter provider
       async loader(_auth, provider) {
         const account = authManager?.getActiveAccount();
         if (account) {
-          // Set all Puter models as FREE (cost = 0)
+          // Set all Puter models (puter-* prefix) as FREE (cost = 0)
           if (provider?.models) {
-            for (const model of Object.values(provider.models)) {
-              (model as any).cost = { input: 0, output: 0, cache: { read: 0, write: 0 } };
+            for (const [modelId, model] of Object.entries(provider.models)) {
+              // Only modify puter-* models
+              if (modelId.startsWith('puter-')) {
+                (model as any).cost = { input: 0, output: 0, cache: { read: 0, write: 0 } };
+              }
             }
           }
           
-          // Return custom fetch function that intercepts and transforms requests
-          // This enables Puter to work as a provider in OpenCode's model picker
-          // Using localhost as fake baseURL that gets intercepted by custom fetch
+          // Return custom fetch function that intercepts puter-* model requests
+          // and routes them to Puter's API with proper request/response translation
           return {
-            apiKey: account.authToken,  // Real auth token for debugging
-            baseURL: 'http://localhost:8080',  // Fake localhost URL intercepted by custom fetch
+            apiKey: '',  // Not needed - auth handled via custom fetch
             fetch: createPuterFetch(account.authToken, pluginConfig),
           };
         }

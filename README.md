@@ -33,7 +33,19 @@ This means whether you have 1 or 1 million users, you pay $0 for AI infrastructu
 
 ## Installation
 
-1. **Add plugin to config** (`~/.config/opencode/opencode.json`):
+### Option A: Let an LLM do it (Easiest)
+
+Paste this into any LLM agent (Claude Code, OpenCode, Cursor, etc.):
+
+```
+Install the opencode-puter-auth plugin and configure Puter.com models 
+in ~/.config/opencode/opencode.json by following:
+https://raw.githubusercontent.com/Mihai-Codes/opencode-puter-auth/main/README.md
+```
+
+### Option B: Manual Setup
+
+1. **Add the plugin to your config** (`~/.config/opencode/opencode.json`):
 
 ```json
 {
@@ -41,61 +53,63 @@ This means whether you have 1 or 1 million users, you pay $0 for AI infrastructu
 }
 ```
 
-2. **Authenticate:**
+2. **Authenticate with Puter:**
 
 ```bash
-npm install -g opencode-puter-auth
-puter-auth
+opencode auth login
+# Select "Puter.com (FREE Unlimited AI)"
 ```
 
-3. **Use Puter models:**
+3. **Add model definitions:**
 
-```bash
-opencode run "Hello" --model=puter/claude-opus-4-5
-```
-
-That's it! The plugin handles everything automatically.
-        "claude-opus-4-5": {
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-puter-auth"],
+  "provider": {
+    "google": {
+      "models": {
+        "puter-claude-opus-4-5": {
           "name": "Claude Opus 4.5 (FREE via Puter)",
           "limit": { "context": 200000, "output": 64000 },
           "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
         },
-        "claude-sonnet-4-5": {
+        "puter-claude-sonnet-4-5": {
           "name": "Claude Sonnet 4.5 (FREE via Puter)",
           "limit": { "context": 200000, "output": 64000 },
           "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
         },
-        "claude-sonnet-4": {
+        "puter-claude-sonnet-4": {
           "name": "Claude Sonnet 4 (FREE via Puter)",
           "limit": { "context": 200000, "output": 64000 },
           "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
         },
-        "claude-haiku-4-5": {
+        "puter-claude-haiku-4-5": {
           "name": "Claude Haiku 4.5 (FREE via Puter - Fast)",
           "limit": { "context": 200000, "output": 64000 },
           "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
         },
-        "gpt-5.2": {
+        "puter-gpt-5.2": {
           "name": "GPT-5.2 (FREE via Puter)",
           "limit": { "context": 128000, "output": 32768 },
           "modalities": { "input": ["text", "image"], "output": ["text"] }
         },
-        "gpt-5-nano": {
+        "puter-gpt-5-nano": {
           "name": "GPT-5 Nano (FREE via Puter - Fast)",
           "limit": { "context": 128000, "output": 16384 },
           "modalities": { "input": ["text", "image"], "output": ["text"] }
         },
-        "o3-mini": {
+        "puter-o3-mini": {
           "name": "o3-mini (FREE via Puter)",
           "limit": { "context": 128000, "output": 32768 },
           "modalities": { "input": ["text"], "output": ["text"] }
         },
-        "gemini-2.5-pro": {
+        "puter-gemini-2.5-pro": {
           "name": "Gemini 2.5 Pro (FREE via Puter - 1M Context)",
           "limit": { "context": 1000000, "output": 65536 },
           "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
         },
-        "gemini-2.5-flash": {
+        "puter-gemini-2.5-flash": {
           "name": "Gemini 2.5 Flash (FREE via Puter)",
           "limit": { "context": 1000000, "output": 65536 },
           "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
@@ -109,7 +123,7 @@ That's it! The plugin handles everything automatically.
 4. **Use it:**
 
 ```bash
-opencode run "Hello" --model=puter/claude-opus-4-5
+opencode run "Hello" --model=google/puter-claude-opus-4-5
 ```
 
 ## Available Models
@@ -118,26 +132,26 @@ opencode run "Hello" --model=puter/claude-opus-4-5
 
 | Model | Description | Context | Best For |
 |-------|-------------|---------|----------|
-| `puter/claude-opus-4-5` | Most capable Claude model | 200K | Complex reasoning, coding |
-| `puter/claude-sonnet-4-5` | Balanced performance | 200K | General coding tasks |
-| `puter/claude-sonnet-4` | Previous gen Sonnet | 200K | Fast coding |
-| `puter/claude-haiku-4-5` | Fastest Claude | 200K | Simple tasks |
+| `google/puter-claude-opus-4-5` | Most capable Claude model | 200K | Complex reasoning, coding |
+| `google/puter-claude-sonnet-4-5` | Balanced performance | 200K | General coding tasks |
+| `google/puter-claude-sonnet-4` | Previous gen Sonnet | 200K | Fast coding |
+| `google/puter-claude-haiku-4-5` | Fastest Claude | 200K | Simple tasks |
 
 ### OpenAI (GPT)
 
 | Model | Description | Context | Best For |
 |-------|-------------|---------|----------|
-| `puter/gpt-5.2` | Latest GPT model | 128K | Advanced tasks |
-| `puter/gpt-5-nano` | Ultra-fast GPT | 128K | Quick responses |
-| `puter/o3-mini` | Reasoning model | 128K | Complex logic |
-| `puter/gpt-4o` | Multimodal GPT | 128K | Vision tasks |
+| `google/puter-gpt-5.2` | Latest GPT model | 128K | Advanced tasks |
+| `google/puter-gpt-5-nano` | Ultra-fast GPT | 128K | Quick responses |
+| `google/puter-o3-mini` | Reasoning model | 128K | Complex logic |
+| `google/puter-gpt-4o` | Multimodal GPT | 128K | Vision tasks |
 
 ### Google (Gemini)
 
 | Model | Description | Context | Best For |
 |-------|-------------|---------|----------|
-| `puter/gemini-2.5-pro` | Best Gemini | 1M | Huge context |
-| `puter/gemini-2.5-flash` | Fast Gemini | 1M | Quick analysis |
+| `google/puter-gemini-2.5-pro` | Best Gemini | 1M | Huge context |
+| `google/puter-gemini-2.5-flash` | Fast Gemini | 1M | Quick analysis |
 
 ## AI SDK Provider (Standalone Usage)
 
@@ -200,10 +214,10 @@ The plugin adds these tools to OpenCode:
 |---------|-------|-------------|
 | **Cost** | FREE | FREE |
 | **Rate Limits** | **NONE** | Weekly quotas |
-| **Claude Opus 4.5** | ✅ Unlimited | ✅ Limited |
-| **Claude Sonnet 4.5** | ✅ Unlimited | ✅ Limited |
-| **GPT-5** | ✅ Unlimited | ❌ No |
-| **Gemini 3** | ❌ No | ✅ Limited |
+| **Claude Opus 4.5** | Unlimited | Limited |
+| **Claude Sonnet 4.5** | Unlimited | Limited |
+| **GPT-5** | Unlimited | No |
+| **Gemini 3** | No | Limited |
 | **Multi-Account** | N/A (unlimited) | Required for quota |
 | **Auth Method** | Puter OAuth | Google OAuth |
 
@@ -222,7 +236,7 @@ http://localhost:19847
 
 ```bash
 opencode auth login
-# Select "Puter.com (FREE Unlimited)"
+# Select "Puter.com (FREE Unlimited AI)"
 ```
 
 ### API timeout errors
@@ -283,4 +297,4 @@ MIT - See [LICENSE](LICENSE)
 
 ---
 
-**Made with ❤️ by [@chindris-mihai-alexandru](https://github.com/chindris-mihai-alexandru)**
+**Made with love by [@chindris-mihai-alexandru](https://github.com/chindris-mihai-alexandru)**

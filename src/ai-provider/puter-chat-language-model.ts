@@ -1,7 +1,7 @@
 /**
  * Puter Chat Language Model
  * 
- * Implements the AI SDK LanguageModelV3 interface for Puter.com's AI API.
+ * Implements the AI SDK LanguageModelV3 interface using the official @heyputer/puter.js SDK.
  * This enables Puter to work as a proper AI SDK provider in OpenCode.
  */
 
@@ -23,19 +23,11 @@ import type {
 } from '@ai-sdk/provider';
 import type { PuterChatSettings, PuterChatConfig } from './puter-chat-settings.js';
 
-// Type for Puter usage in response
+// Type definitions for Puter SDK responses
 interface PuterUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
-  total_tokens?: number;
-}
-
-// Puter API types
-interface PuterMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
-  tool_call_id?: string;
-  tool_calls?: PuterToolCall[];
+  cached_tokens?: number;
 }
 
 interface PuterToolCall {
@@ -47,7 +39,43 @@ interface PuterToolCall {
   };
 }
 
-interface PuterTool {
+interface PuterChatResponse {
+  index?: number;
+  message?: {
+    role: string;
+    content: string | null;
+    tool_calls?: PuterToolCall[];
+    refusal?: string | null;
+  };
+  finish_reason?: string;
+  usage?: PuterUsage;
+  via_ai_chat_service?: boolean;
+  toString?: () => string;
+  valueOf?: () => string;
+}
+
+interface PuterStreamChunk {
+  type?: string;
+  text?: string;
+  usage?: PuterUsage;
+}
+
+// Puter SDK message format
+interface PuterSDKMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | PuterSDKContentPart[];
+  tool_call_id?: string;
+  tool_calls?: PuterToolCall[];
+}
+
+interface PuterSDKContentPart {
+  type: 'text' | 'tool_result';
+  text?: string;
+  tool_use_id?: string;
+  content?: string;
+}
+
+interface PuterSDKTool {
   type: 'function';
   function: {
     name: string;
@@ -56,60 +84,32 @@ interface PuterTool {
   };
 }
 
-interface PuterRequestBody {
-  interface: string;
-  service: string;
-  method: string;
-  args: {
-    messages: PuterMessage[];
-    model: string;
-    stream: boolean;
-    max_tokens?: number;
-    temperature?: number;
-    top_p?: number;
-    top_k?: number;
-    stop?: string[];
-    tools?: PuterTool[];
-  };
-  auth_token: string;
+interface PuterSDKOptions {
+  model: string;
+  stream?: boolean;
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  stop?: string[];
+  tools?: PuterSDKTool[];
 }
 
-interface PuterResponse {
-  success?: boolean;
-  result?: {
-    message?: {
-      role: string;
-      content: string | null;
-      tool_calls?: PuterToolCall[];
-    };
-    finish_reason?: string;
-    usage?: {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-    };
+// Type for the Puter SDK instance
+interface PuterSDK {
+  ai: {
+    chat: (
+      messages: string | PuterSDKMessage[],
+      options?: PuterSDKOptions
+    ) => Promise<PuterChatResponse | AsyncIterable<PuterStreamChunk>>;
   };
-  error?: {
-    message: string;
-    code?: string;
-  };
-}
-
-interface PuterStreamChunk {
-  text?: string;
-  reasoning?: string;
-  tool_calls?: PuterToolCall[];
-  done?: boolean;
-  finish_reason?: string;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
+  setAuthToken: (token: string) => void;
+  print: (message: unknown) => void;
 }
 
 /**
  * Puter Chat Language Model implementing LanguageModelV3.
+ * Uses the official @heyputer/puter.js SDK for all API calls.
  */
 export class PuterChatLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = 'v3' as const;
@@ -118,6 +118,7 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   
   private readonly settings: PuterChatSettings;
   private readonly config: PuterChatConfig;
+  private puterInstance: PuterSDK | null = null;
 
   constructor(
     modelId: string,
@@ -131,6 +132,35 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   }
 
   /**
+   * Initialize the Puter SDK with auth token.
+   */
+  private async initPuterSDK(): Promise<PuterSDK> {
+    if (this.puterInstance) {
+      return this.puterInstance;
+    }
+
+    // Dynamically import the Puter SDK init function
+    const { createRequire } = await import('module');
+    const require = createRequire(import.meta.url);
+    const { init } = require('@heyputer/puter.js/src/init.cjs') as { init: (token?: string) => PuterSDK };
+
+    // Get auth token from config headers
+    const headers = await this.config.headers();
+    const authHeader = headers['Authorization'] || '';
+    const authToken = authHeader.replace('Bearer ', '');
+
+    if (!authToken) {
+      throw new Error(
+        'Puter auth token is required. Please authenticate with `npx opencode-puter-auth login` or set PUTER_AUTH_TOKEN.'
+      );
+    }
+
+    // Initialize the SDK with the auth token
+    this.puterInstance = init(authToken);
+    return this.puterInstance;
+  }
+
+  /**
    * Supported URL patterns for native file handling.
    * Puter doesn't natively handle URLs, so we return an empty map.
    */
@@ -139,10 +169,10 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   }
 
   /**
-   * Convert AI SDK prompt to Puter message format.
+   * Convert AI SDK prompt to Puter SDK message format.
    */
-  private convertPromptToMessages(prompt: LanguageModelV3Message[]): PuterMessage[] {
-    const messages: PuterMessage[] = [];
+  private convertPromptToMessages(prompt: LanguageModelV3Message[]): PuterSDKMessage[] {
+    const messages: PuterSDKMessage[] = [];
 
     for (const message of prompt) {
       if (message.role === 'system') {
@@ -169,7 +199,7 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
         const toolCallParts = message.content
           .filter((part): part is LanguageModelV3ToolCallPart => part.type === 'tool-call');
 
-        const puterMessage: PuterMessage = {
+        const puterMessage: PuterSDKMessage = {
           role: 'assistant',
           content: textParts.join('\n') || '',
         };
@@ -218,9 +248,9 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   }
 
   /**
-   * Convert AI SDK tools to Puter tool format.
+   * Convert AI SDK tools to Puter SDK tool format.
    */
-  private convertTools(tools: LanguageModelV3FunctionTool[] | undefined): PuterTool[] | undefined {
+  private convertTools(tools: LanguageModelV3FunctionTool[] | undefined): PuterSDKTool[] | undefined {
     if (!tools || tools.length === 0) return undefined;
 
     return tools.map(tool => ({
@@ -234,34 +264,39 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   }
 
   /**
-   * Build the request body for Puter API.
+   * Build options for Puter SDK chat call.
    */
-  private async buildRequestBody(options: LanguageModelV3CallOptions, streaming: boolean): Promise<PuterRequestBody> {
-    const messages = this.convertPromptToMessages(options.prompt);
-    
+  private buildSDKOptions(options: LanguageModelV3CallOptions, streaming: boolean): PuterSDKOptions {
     // Filter to only function tools
     const functionTools = options.tools?.filter(
       (tool): tool is LanguageModelV3FunctionTool => tool.type === 'function'
     );
     const tools = this.convertTools(functionTools);
 
-    return {
-      interface: 'puter-chat-completion',
-      service: 'ai-chat',
-      method: 'complete',
-      args: {
-        messages,
-        model: this.modelId,
-        stream: streaming,
-        max_tokens: options.maxOutputTokens ?? this.settings.maxTokens,
-        temperature: options.temperature ?? this.settings.temperature,
-        top_p: options.topP ?? this.settings.topP,
-        top_k: options.topK ?? this.settings.topK,
-        stop: options.stopSequences ?? this.settings.stopSequences,
-        tools,
-      },
-      auth_token: (await this.config.headers())['Authorization']?.replace('Bearer ', '') || '',
+    const sdkOptions: PuterSDKOptions = {
+      model: this.modelId,
+      stream: streaming,
     };
+
+    // Only add optional params if they have values
+    const maxTokens = options.maxOutputTokens ?? this.settings.maxTokens;
+    if (maxTokens !== undefined) sdkOptions.max_tokens = maxTokens;
+
+    const temperature = options.temperature ?? this.settings.temperature;
+    if (temperature !== undefined) sdkOptions.temperature = temperature;
+
+    const topP = options.topP ?? this.settings.topP;
+    if (topP !== undefined) sdkOptions.top_p = topP;
+
+    const topK = options.topK ?? this.settings.topK;
+    if (topK !== undefined) sdkOptions.top_k = topK;
+
+    const stop = options.stopSequences ?? this.settings.stopSequences;
+    if (stop !== undefined) sdkOptions.stop = stop;
+
+    if (tools !== undefined) sdkOptions.tools = tools;
+
+    return sdkOptions;
   }
 
   /**
@@ -291,7 +326,7 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
       inputTokens: {
         total: usage?.prompt_tokens,
         noCache: undefined,
-        cacheRead: undefined,
+        cacheRead: usage?.cached_tokens,
         cacheWrite: undefined,
       },
       outputTokens: {
@@ -303,47 +338,29 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   }
 
   /**
-   * Non-streaming generation.
+   * Non-streaming generation using Puter SDK.
    */
   async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
-    const requestBody = await this.buildRequestBody(options, false);
+    const puter = await this.initPuterSDK();
+    const messages = this.convertPromptToMessages(options.prompt);
+    const sdkOptions = this.buildSDKOptions(options, false);
     const warnings: SharedV3Warning[] = [];
 
-    const response = await this.config.fetch(`${this.config.baseURL}/drivers/call`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await this.config.headers()),
-      },
-      body: JSON.stringify(requestBody),
-      signal: options.abortSignal,
-    });
+    const response = await puter.ai.chat(messages, sdkOptions) as PuterChatResponse;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Puter API error (${response.status}): ${errorText}`);
-    }
-
-    const puterResponse = await response.json() as PuterResponse;
-
-    if (puterResponse.error) {
-      throw new Error(`Puter API error: ${puterResponse.error.message}`);
-    }
-
-    const result = puterResponse.result;
     const content: LanguageModelV3Content[] = [];
 
     // Add text content
-    if (result?.message?.content) {
+    if (response.message?.content) {
       content.push({
         type: 'text',
-        text: result.message.content,
+        text: response.message.content,
       });
     }
 
     // Add tool calls
-    if (result?.message?.tool_calls) {
-      for (const tc of result.message.tool_calls) {
+    if (response.message?.tool_calls) {
+      for (const tc of response.message.tool_calls) {
         content.push({
           type: 'tool-call',
           toolCallId: tc.id,
@@ -355,73 +372,46 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
 
     return {
       content,
-      finishReason: this.mapFinishReason(result?.finish_reason),
-      usage: this.mapUsage(result?.usage),
+      finishReason: this.mapFinishReason(response.finish_reason),
+      usage: this.mapUsage(response.usage),
       warnings,
-      request: { body: requestBody },
+      request: { body: { messages, options: sdkOptions } },
       response: {
-        body: puterResponse,
+        body: response,
       },
     };
   }
 
   /**
-   * Streaming generation.
+   * Streaming generation using Puter SDK.
    */
   async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
-    const requestBody = await this.buildRequestBody(options, true);
+    const puter = await this.initPuterSDK();
+    const messages = this.convertPromptToMessages(options.prompt);
+    const sdkOptions = this.buildSDKOptions(options, true);
     const warnings: SharedV3Warning[] = [];
     const generateId = this.config.generateId;
 
-    const response = await this.config.fetch(`${this.config.baseURL}/drivers/call`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(await this.config.headers()),
-      },
-      body: JSON.stringify(requestBody),
-      signal: options.abortSignal,
-    });
+    const streamResponse = await puter.ai.chat(messages, sdkOptions) as AsyncIterable<PuterStreamChunk>;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Puter API error (${response.status}): ${errorText}`);
-    }
-
-    if (!response.body) {
-      throw new Error('No response body for streaming');
-    }
-
+    // Create a transform stream to convert Puter chunks to AI SDK format
     const self = this;
     let textId: string | null = null;
-    let reasoningId: string | null = null;
-    const toolCallIds: Map<string, string> = new Map();
-    let buffer = '';
+    let fullText = '';
+    let finalUsage: PuterUsage | undefined;
 
-    const transformStream = new TransformStream<Uint8Array, LanguageModelV3StreamPart>({
-      start(controller) {
+    const stream = new ReadableStream<LanguageModelV3StreamPart>({
+      async start(controller) {
         // Emit stream-start
         controller.enqueue({
           type: 'stream-start',
           warnings,
         });
-      },
 
-      async transform(chunk, controller) {
-        const decoder = new TextDecoder();
-        buffer += decoder.decode(chunk, { stream: true });
-        
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-
-          try {
-            const puterChunk = JSON.parse(line) as PuterStreamChunk;
-
+        try {
+          for await (const chunk of streamResponse) {
             // Handle text content
-            if (puterChunk.text) {
+            if (chunk.text) {
               if (!textId) {
                 textId = generateId();
                 controller.enqueue({
@@ -429,122 +419,45 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
                   id: textId,
                 });
               }
+              fullText += chunk.text;
               controller.enqueue({
                 type: 'text-delta',
                 id: textId,
-                delta: puterChunk.text,
+                delta: chunk.text,
               });
             }
 
-            // Handle reasoning content
-            if (puterChunk.reasoning) {
-              if (!reasoningId) {
-                reasoningId = generateId();
-                controller.enqueue({
-                  type: 'reasoning-start',
-                  id: reasoningId,
-                });
-              }
-              controller.enqueue({
-                type: 'reasoning-delta',
-                id: reasoningId,
-                delta: puterChunk.reasoning,
-              });
+            // Handle usage (usually at the end)
+            if (chunk.usage) {
+              finalUsage = chunk.usage;
             }
-
-            // Handle tool calls
-            if (puterChunk.tool_calls) {
-              for (const tc of puterChunk.tool_calls) {
-                if (!toolCallIds.has(tc.id)) {
-                  const streamId = generateId();
-                  toolCallIds.set(tc.id, streamId);
-                  controller.enqueue({
-                    type: 'tool-input-start',
-                    id: streamId,
-                    toolName: tc.function.name,
-                  });
-                }
-                
-                const streamId = toolCallIds.get(tc.id)!;
-                controller.enqueue({
-                  type: 'tool-input-delta',
-                  id: streamId,
-                  delta: tc.function.arguments,
-                });
-              }
-            }
-
-            // Handle completion
-            if (puterChunk.done || puterChunk.finish_reason) {
-              // Close text stream
-              if (textId) {
-                controller.enqueue({
-                  type: 'text-end',
-                  id: textId,
-                });
-              }
-
-              // Close reasoning stream
-              if (reasoningId) {
-                controller.enqueue({
-                  type: 'reasoning-end',
-                  id: reasoningId,
-                });
-              }
-
-              // Close tool call streams and emit tool-call events
-              for (const [, streamId] of toolCallIds) {
-                controller.enqueue({
-                  type: 'tool-input-end',
-                  id: streamId,
-                });
-              }
-
-              // Emit finish
-              controller.enqueue({
-                type: 'finish',
-                usage: self.mapUsage(puterChunk.usage),
-                finishReason: self.mapFinishReason(puterChunk.finish_reason),
-              });
-            }
-          } catch {
-            // Skip malformed lines
           }
-        }
-      },
 
-      flush(controller) {
-        // Process any remaining buffer
-        if (buffer.trim()) {
-          try {
-            const puterChunk = JSON.parse(buffer) as PuterStreamChunk;
-            
-            if (puterChunk.done || puterChunk.finish_reason) {
-              if (textId) {
-                controller.enqueue({
-                  type: 'text-end',
-                  id: textId,
-                });
-              }
-              
-              controller.enqueue({
-                type: 'finish',
-                usage: self.mapUsage(puterChunk.usage),
-                finishReason: self.mapFinishReason(puterChunk.finish_reason),
-              });
-            }
-          } catch {
-            // Ignore
+          // Close text stream if we had one
+          if (textId) {
+            controller.enqueue({
+              type: 'text-end',
+              id: textId,
+            });
           }
+
+          // Emit finish
+          controller.enqueue({
+            type: 'finish',
+            usage: self.mapUsage(finalUsage),
+            finishReason: self.mapFinishReason('stop'),
+          });
+
+          controller.close();
+        } catch (error) {
+          controller.error(error);
         }
       },
     });
 
-    const stream = response.body.pipeThrough(transformStream);
-
     return {
       stream,
-      request: { body: requestBody },
+      request: { body: { messages, options: sdkOptions } },
     };
   }
 }
