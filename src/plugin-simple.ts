@@ -3,7 +3,7 @@
  * Just provides auth loader - users authenticate via `puter-auth` CLI
  */
 
-import { PuterAuthManager } from './auth.js';
+import { createPuterAuthManager } from './auth.js';
 import path from 'path';
 import os from 'os';
 
@@ -17,7 +17,7 @@ export const PuterAuthPlugin = async () => {
       provider: 'puter',
       loader: async (_getAuth: any, _provider: any) => {
         const configDir = getConfigDir();
-        const authManager = new PuterAuthManager(configDir);
+        const authManager = createPuterAuthManager(configDir);
         await authManager.init();
         
         const activeAccount = authManager.getActiveAccount();

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { PuterAuthManager } from './auth.js';
+import { createPuterAuthManager } from './auth.js';
 import { homedir } from 'os';
 import { join } from 'path';
 
 const configDir = join(homedir(), '.config', 'opencode');
-const authManager = new PuterAuthManager(configDir);
+const authManager = createPuterAuthManager(configDir);
 
 await authManager.init();
 const result = await authManager.login();

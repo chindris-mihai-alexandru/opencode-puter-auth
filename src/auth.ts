@@ -193,7 +193,9 @@ const getAuthHtml = (callbackUrl: string) => `
 </html>
 `;
 
-export class PuterAuthManager {
+// Internal class - not exported to avoid OpenCode plugin loader issues
+// OpenCode iterates through all exports and calls them as functions
+class PuterAuthManagerInternal {
   private configDir: string;
   private accountsFile: string;
   private storage: PuterAccountsStorage | null = null;
@@ -470,4 +472,17 @@ export class PuterAuthManager {
     };
     await this.saveAccounts();
   }
+}
+
+/**
+ * Type alias for the auth manager (for external use without exposing class)
+ */
+export type PuterAuthManager = PuterAuthManagerInternal;
+
+/**
+ * Factory function to create a PuterAuthManager instance
+ * This is the safe way to instantiate the auth manager
+ */
+export function createPuterAuthManager(configDir: string, config: Partial<PuterConfig> = {}): PuterAuthManager {
+  return new PuterAuthManagerInternal(configDir, config);
 }

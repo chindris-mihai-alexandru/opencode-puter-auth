@@ -15,7 +15,7 @@ import os from 'node:os';
 import http from 'node:http';
 import { URL } from 'node:url';
 import { PuterClient } from './client.js';
-import { PuterAuthManager } from './auth.js';
+import { createPuterAuthManager, type PuterAuthManager } from './auth.js';
 import { createPuterFetch } from './provider.js';
 import type { PuterConfig, PuterChatMessage, PuterAccount } from './types.js';
 import { PuterConfigSchema } from './types.js';
@@ -74,7 +74,7 @@ export const PuterAuthPlugin: Plugin = async (_input: PluginInput): Promise<Hook
   pluginConfig = await loadConfig(configDir);
   
   // Initialize auth manager
-  authManager = new PuterAuthManager(configDir, pluginConfig);
+  authManager = createPuterAuthManager(configDir, pluginConfig);
   await authManager.init();
   
   // Initialize client if we have an active account

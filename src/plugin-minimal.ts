@@ -3,7 +3,7 @@
  * Implements auth loader pattern like Antigravity plugin
  */
 
-import { PuterAuthManager } from './auth.js';
+import { createPuterAuthManager } from './auth.js';
 import path from 'path';
 import os from 'os';
 
@@ -24,7 +24,7 @@ export const PuterAuthPlugin = async (_ctx: any) => {
       loader: async (_getAuth: any) => {
         console.log("[PUTER] Auth loader called");
         const configDir = getConfigDir();
-        const authManager = new PuterAuthManager(configDir);
+        const authManager = createPuterAuthManager(configDir);
         await authManager.init();
         
         const activeAccount = authManager.getActiveAccount();
@@ -132,7 +132,7 @@ export const PuterAuthPlugin = async (_ctx: any) => {
         authorize: async (inputs?: Record<string, string>) => {
           console.log("[PUTER] Authorize called with inputs:", inputs);
           const configDir = getConfigDir();
-          const authManager = new PuterAuthManager(configDir);
+          const authManager = createPuterAuthManager(configDir);
           await authManager.init();
           const result = await authManager.login();
           

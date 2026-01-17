@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { PuterAuthManager } from '../src/auth.js';
+import { createPuterAuthManager, type PuterAuthManager } from '../src/auth.js';
 
 describe('PuterAuthManager', () => {
   let testDir: string;
@@ -12,7 +12,7 @@ describe('PuterAuthManager', () => {
     // Create a temp directory for each test
     testDir = path.join(os.tmpdir(), `puter-auth-test-${Date.now()}`);
     await fs.mkdir(testDir, { recursive: true });
-    authManager = new PuterAuthManager(testDir);
+    authManager = createPuterAuthManager(testDir);
   });
 
   afterEach(async () => {
@@ -177,7 +177,7 @@ describe('PuterAuthManager', () => {
       });
 
       // Create new manager and verify persistence
-      const newManager = new PuterAuthManager(testDir);
+      const newManager = createPuterAuthManager(testDir);
       await newManager.init();
       
       expect(newManager.getAllAccounts()).toHaveLength(1);

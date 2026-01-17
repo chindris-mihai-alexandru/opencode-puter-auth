@@ -1,6 +1,6 @@
 {
   "name": "opencode-puter-auth",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "description": "Puter.com OAuth auth plugin for OpenCode - FREE UNLIMITED access to Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, and 500+ AI models",
   "bin": {
     "puter-auth": "dist/cli.js"
@@ -8,6 +8,18 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./ai-provider": {
+      "types": "./dist/ai-provider/index.d.ts",
+      "import": "./dist/ai-provider/index.js",
+      "default": "./dist/ai-provider/index.js"
+    }
+  },
   "license": "MIT",
   "author": "chindris-mihai-alexandru",
   "funding": {
@@ -68,6 +80,7 @@
     "@vitest/coverage-v8": "^4.0.0",
     "@vitest/ui": "^4.0.0",
     "msw": "^2.12.7",
+    "opencode-antigravity-auth": "^1.3.0",
     "typescript": "^5.0.0",
     "vitest": "^4.0.0"
   },
