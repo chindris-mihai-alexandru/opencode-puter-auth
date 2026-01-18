@@ -5,32 +5,30 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/chindrismihai)
 
-> **FREE, UNLIMITED access to Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, DeepSeek, and 500+ AI models** through Puter.com's revolutionary "User-Pays" model.
+> Access Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, DeepSeek, and 500+ AI models through Puter.com's "User-Pays" model.
 
-Enable OpenCode to authenticate with [Puter.com](https://puter.com) via OAuth, giving you unlimited access to the world's best AI coding models - **completely free**.
+Enable OpenCode to authenticate with [Puter.com](https://puter.com) via OAuth, giving you access to premium AI models through your Puter account.
 
 ## What You Get
 
-- **FREE, UNLIMITED Claude Opus 4.5** - The best coding AI model in the world
-- **FREE, UNLIMITED Claude Sonnet 4.5** - Fast, powerful reasoning
-- **FREE, UNLIMITED GPT-5.2, o3-mini, o4-mini** - OpenAI's latest models
-- **FREE, UNLIMITED Gemini 2.5 Pro** - 1M context window
-- **FREE, UNLIMITED DeepSeek R1** - Advanced reasoning model
+- **Claude Opus 4.5, Sonnet 4.5** - Best coding AI models
+- **GPT-5.2, o3-mini, o4-mini** - OpenAI's latest models
+- **Gemini 2.5 Pro** - 1M context window
+- **DeepSeek R1** - Advanced reasoning model
 - **500+ More Models** - Mistral, Llama, Grok, and more
-- **No Rate Limits** - Puter's "User-Pays" model means truly unlimited usage
 - **Real-time SSE Streaming** - Full streaming support
 - **Tool Calling** - Native function calling support
 - **Vision Support** - Image analysis capabilities
 
 ## How It Works
 
-Puter.com uses the innovative **"User-Pays" model**:
+Puter.com uses the **"User-Pays" model**:
 
-1. **You (the developer)** pay nothing for infrastructure
+1. **Developers** pay nothing for infrastructure (no API keys, no billing setup)
 2. **Users** cover their own AI usage costs through their Puter account
-3. **For personal use**, you ARE the user - so it's FREE for you!
+3. New accounts receive initial credits; premium models consume credits
 
-This means whether you have 1 or 1 million users, you pay $0 for AI infrastructure.
+> **Important:** Premium AI models (Claude, GPT, etc.) consume Puter credits. "Unlimited" refers to developers not paying for infrastructure - users still have credit-based limits. When credits run out, you can add more on Puter.com.
 
 ## Installation
 
@@ -231,20 +229,27 @@ The plugin adds these tools to OpenCode:
 
 | Feature | Puter | Antigravity |
 |---------|-------|-------------|
-| **Cost** | FREE | FREE |
-| **Rate Limits** | **NONE** | Weekly quotas |
-| **Claude Opus 4.5** | **Unlimited** | Limited |
-| **Claude Sonnet 4.5** | **Unlimited** | Limited |
-| **GPT-5** | **Unlimited** | No |
-| **DeepSeek R1** | **Unlimited** | No |
-| **Gemini 3** | No | Limited |
-| **Multi-Account** | N/A (unlimited) | Required for quota |
+| **Cost Model** | Credit-based | Weekly quotas |
+| **Claude Opus 4.5** | Yes (uses credits) | Limited weekly |
+| **Claude Sonnet 4.5** | Yes (uses credits) | Limited weekly |
+| **GPT-5** | Yes (uses credits) | No |
+| **DeepSeek R1** | Yes (uses credits) | No |
+| **Gemini 3** | No | Limited weekly |
 | **Provider Type** | Standalone (`puter/`) | Google piggyback (`google/`) |
-| **Shows in `opencode auth login`** | **Yes** (select Puter) | Yes (select Google) |
+| **Initial Free Credits** | Yes (new accounts) | Weekly refresh |
 
-**Bottom line**: Use **Puter** for unlimited Claude/GPT/DeepSeek access. Use **Antigravity** for Gemini 3.
+**Bottom line**: Use **Puter** if you want access to Claude/GPT/DeepSeek (credit-based). Use **Antigravity** for Gemini 3 (weekly quota).
 
 ## Troubleshooting
+
+### "You have reached your AI usage limit"
+
+This means your Puter account has exhausted its credits. Premium AI models (Claude, GPT, etc.) consume credits.
+
+**Solutions:**
+1. Add more credits on [Puter.com](https://puter.com)
+2. Use a different free provider (Antigravity, OpenRouter free tier, Cerebras, Groq)
+3. Create a new Puter account (new accounts get initial credits)
 
 ### Clear cached plugin and reinstall
 
