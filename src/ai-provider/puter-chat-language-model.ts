@@ -39,11 +39,22 @@ interface PuterToolCall {
   };
 }
 
+// Content block from Claude-style response
+interface PuterContentBlock {
+  type: 'text' | 'tool_use';
+  text?: string;
+  // For tool_use blocks
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+}
+
 interface PuterChatResponse {
   index?: number;
   message?: {
     role: string;
-    content: string | null;
+    // Content can be a string OR an array of content blocks (Claude-style)
+    content: string | PuterContentBlock[] | null;
     tool_calls?: PuterToolCall[];
     refusal?: string | null;
   };
@@ -338,6 +349,26 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   }
 
   /**
+   * Extract text from response content (handles both string and array formats).
+   */
+  private extractTextContent(content: string | PuterContentBlock[] | null | undefined): string {
+    if (!content) return '';
+    
+    if (typeof content === 'string') {
+      return content;
+    }
+    
+    if (Array.isArray(content)) {
+      return content
+        .filter((block): block is PuterContentBlock => block.type === 'text' && typeof block.text === 'string')
+        .map(block => block.text)
+        .join('');
+    }
+    
+    return '';
+  }
+
+  /**
    * Non-streaming generation using Puter SDK.
    */
   async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
@@ -350,15 +381,30 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
 
     const content: LanguageModelV3Content[] = [];
 
-    // Add text content
-    if (response.message?.content) {
+    // Extract text content (handles both string and array formats)
+    const textContent = this.extractTextContent(response.message?.content);
+    if (textContent) {
       content.push({
         type: 'text',
-        text: response.message.content,
+        text: textContent,
       });
     }
 
-    // Add tool calls
+    // Handle tool use from Claude-style content blocks
+    if (Array.isArray(response.message?.content)) {
+      for (const block of response.message.content) {
+        if (block.type === 'tool_use' && block.id && block.name) {
+          content.push({
+            type: 'tool-call',
+            toolCallId: block.id,
+            toolName: block.name,
+            input: typeof block.input === 'string' ? block.input : JSON.stringify(block.input || {}),
+          });
+        }
+      }
+    }
+
+    // Add tool calls from legacy format
     if (response.message?.tool_calls) {
       for (const tc of response.message.tool_calls) {
         content.push({

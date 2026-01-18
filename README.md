@@ -147,13 +147,25 @@ https://raw.githubusercontent.com/Mihai-Codes/opencode-puter-auth/main/README.md
 2. **Authenticate with Puter:**
 
 ```bash
-opencode auth login
-# Select "Puter" provider
-# Select "Puter.com (500+ AI Models)"
-# Complete OAuth in browser
+# Using the included CLI
+npx opencode-puter-auth login
+
+# Or if you have the plugin installed globally
+puter-auth login
 ```
 
-3. **Use it:**
+This opens a browser window for Puter.com login. Enter your Puter username and password.
+
+> **Note:** Puter is a custom provider, so it won't appear in `opencode auth login`. Use the CLI above to authenticate.
+
+3. **Verify authentication:**
+
+```bash
+puter-auth status
+# Or: npx opencode-puter-auth status
+```
+
+4. **Use it:**
 
 ```bash
 opencode --model=puter/claude-opus-4-5
@@ -331,15 +343,15 @@ If you were using the old configuration format that piggybacked on Google (`goog
 
 4. **Re-authenticate:**
    ```bash
-   opencode auth login
-   # Select "Puter" provider → "Puter.com (500+ AI Models)"
+   npx opencode-puter-auth login
+   # Or: puter-auth login
    ```
 
 ### Why the Change?
 
 The new standalone provider offers:
 - **Direct API access** - No routing through Google/Antigravity infrastructure
-- **Proper OAuth visibility** - Puter now appears in `opencode auth login`
+- **Dedicated CLI** - Use `puter-auth login` for authentication
 - **Better reliability** - Direct connection to Puter's API
 - **Cleaner model names** - `puter/claude-opus-4-5` instead of `google/puter-claude-opus-4-5`
 
@@ -381,9 +393,11 @@ http://localhost:19847
 ### "Not authenticated" error
 
 ```bash
-opencode auth login
-# Select "Puter" provider
+npx opencode-puter-auth login
+# Or: puter-auth login
 ```
+
+> **Note:** Puter is a custom provider and won't appear in `opencode auth login`. You must use the plugin's CLI.
 
 ### API timeout errors
 
