@@ -5,6 +5,8 @@
  * and 500+ AI models through Puter.com's "User-Pays" model.
  * Free tier available with undocumented limits.
  * 
+ * Features automatic model fallback when rate limits are encountered.
+ * 
  * @author chindris-mihai-alexandru
  * @license MIT
  */
@@ -27,6 +29,22 @@ export type { PuterProvider, PuterChatSettings, PuterProviderConfig, PuterChatCo
 // Logger exports for debug mode
 export { createLogger, createLoggerFromConfig, nullLogger, LogLevel } from './logger.js';
 export type { Logger, LoggerOptions } from './logger.js';
+
+// Fallback Manager exports for automatic model fallback
+export { 
+  FallbackManager, 
+  getGlobalFallbackManager, 
+  resetGlobalFallbackManager,
+  isRateLimitError,
+  FallbackExhaustedError,
+  DEFAULT_FALLBACK_MODELS,
+  DEFAULT_COOLDOWN_MS,
+} from './fallback.js';
+export type { 
+  FallbackOptions, 
+  FallbackResult, 
+  FallbackAttempt,
+} from './fallback.js';
 
 // Type exports for TypeScript users (these don't cause runtime issues)
 export type { PuterConfig, PuterAccount, PuterChatOptions, PuterChatResponse, PuterChatMessage, PuterChatStreamChunk, PuterModelInfo } from './types.js';

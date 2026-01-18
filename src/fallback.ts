@@ -1,0 +1,473 @@
+/**
+ * Fallback Manager for opencode-puter-auth
+ * 
+ * Provides automatic model fallback when rate limits are encountered.
+ * When a model returns a rate limit error (429/403), the manager:
+ * 1. Adds the model to a cooldown list
+ * 2. Tries alternative free models in order
+ * 3. Returns to the original model after cooldown expires
+ * 
+ * @example
+ * ```ts
+ * const manager = new FallbackManager({
+ *   fallbackModels: ['openrouter:xiaomi/mimo-v2-flash:free'],
+ *   cooldownMs: 60000,
+ * });
+ * 
+ * const result = await manager.executeWithFallback(
+ *   'claude-opus-4-5',
+ *   async (model) => puter.ai.chat(messages, { model }),
+ *   logger
+ * );
+ * 
+ * if (result.wasFallback) {
+ *   console.log(`Used fallback model: ${result.usedModel}`);
+ * }
+ * ```
+ */
+
+import type { Logger } from './logger.js';
+
+/**
+ * Default fallback models - FREE OpenRouter models via Puter gateway.
+ * Ordered by quality/capability (best first).
+ */
+export const DEFAULT_FALLBACK_MODELS = [
+  // Tier 1: Best free models (try these first)
+  'openrouter:xiaomi/mimo-v2-flash:free',       // 309B MoE, #1 SWE-bench
+  'openrouter:deepseek/deepseek-r1-0528:free',  // 671B MoE, o1-level reasoning
+  'openrouter:mistralai/devstral-2512:free',    // 123B, agentic coding
+  
+  // Tier 2: Other quality free models
+  'openrouter:qwen/qwen3-coder:free',           // 480B MoE coding model
+  'openrouter:google/gemini-2.0-flash-exp:free',// Google's experimental
+  
+  // Tier 3: Fallback free models
+  'openrouter:meta-llama/llama-4-maverick:free',
+  'openrouter:openai/gpt-oss-120b:free',
+];
+
+/**
+ * Default cooldown duration in milliseconds (60 seconds)
+ */
+export const DEFAULT_COOLDOWN_MS = 60000;
+
+/**
+ * Configuration options for FallbackManager
+ */
+export interface FallbackOptions {
+  /** List of fallback models to try when primary fails */
+  fallbackModels?: string[];
+  /** Cooldown duration in milliseconds */
+  cooldownMs?: number;
+  /** Whether fallback is enabled */
+  enabled?: boolean;
+}
+
+/**
+ * Record of a single model attempt
+ */
+export interface FallbackAttempt {
+  /** Model that was tried */
+  model: string;
+  /** Whether the attempt succeeded */
+  success: boolean;
+  /** Error message if failed */
+  error?: string;
+  /** Whether the error was a rate limit */
+  isRateLimit?: boolean;
+  /** Duration of the attempt in ms */
+  durationMs?: number;
+}
+
+/**
+ * Result of executeWithFallback
+ */
+export interface FallbackResult<T> {
+  /** The result from the successful model */
+  result: T;
+  /** The model that was actually used */
+  usedModel: string;
+  /** Whether a fallback model was used instead of the primary */
+  wasFallback: boolean;
+  /** All attempts made (for debugging/logging) */
+  attempts: FallbackAttempt[];
+}
+
+/**
+ * Error thrown when all models (primary + fallbacks) have failed
+ */
+export class FallbackExhaustedError extends Error {
+  public readonly attempts: FallbackAttempt[];
+  
+  constructor(attempts: FallbackAttempt[]) {
+    const modelsTried = attempts.map(a => a.model).join(', ');
+    super(`All models exhausted. Tried: ${modelsTried}`);
+    this.name = 'FallbackExhaustedError';
+    this.attempts = attempts;
+  }
+}
+
+/**
+ * Check if an error indicates a rate limit
+ * 
+ * Detects various rate limit error patterns from different providers:
+ * - HTTP 429 (Too Many Requests)
+ * - HTTP 403 (Forbidden) - Puter uses this for account limits
+ * - Various error message patterns
+ * 
+ * @param error - The error to check
+ * @returns true if the error is a rate limit error
+ */
+export function isRateLimitError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  
+  const message = error.message.toLowerCase();
+  
+  // HTTP status codes that indicate rate limiting
+  if (message.includes('(429)') || message.includes('status 429')) return true;
+  if (message.includes('(403)') || message.includes('status 403')) return true;
+  
+  // Error message patterns from various providers
+  const rateLimitPatterns = [
+    'rate limit',
+    'rate_limit',
+    'ratelimit',
+    'too many requests',
+    'quota exceeded',
+    'quota_exceeded',
+    'limit exceeded',
+    'request limit',
+    'credits exhausted',
+    'insufficient credits',
+    'usage limit',
+    'capacity',
+    'overloaded',
+    'try again later',
+  ];
+  
+  return rateLimitPatterns.some(pattern => message.includes(pattern));
+}
+
+/**
+ * Cooldown entry storing when a model will be available again
+ */
+interface CooldownEntry {
+  /** Timestamp when cooldown expires */
+  expiresAt: number;
+  /** Reason for cooldown */
+  reason: string;
+}
+
+/**
+ * Manages automatic model fallback when rate limits are encountered.
+ * 
+ * This is a singleton-style class designed to be shared across all
+ * PuterChatLanguageModel instances so cooldown state is consistent.
+ */
+export class FallbackManager {
+  private cooldownMap: Map<string, CooldownEntry> = new Map();
+  private fallbackModels: string[];
+  private cooldownMs: number;
+  private enabled: boolean;
+  
+  constructor(options: FallbackOptions = {}) {
+    this.fallbackModels = options.fallbackModels ?? DEFAULT_FALLBACK_MODELS;
+    this.cooldownMs = options.cooldownMs ?? DEFAULT_COOLDOWN_MS;
+    this.enabled = options.enabled ?? true;
+  }
+  
+  /**
+   * Check if a model is currently on cooldown
+   * 
+   * @param model - Model ID to check
+   * @returns true if the model is on cooldown
+   */
+  public isModelOnCooldown(model: string): boolean {
+    const entry = this.cooldownMap.get(model);
+    if (!entry) return false;
+    
+    // Check if cooldown has expired
+    if (Date.now() >= entry.expiresAt) {
+      this.cooldownMap.delete(model);
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
+   * Get remaining cooldown time for a model in milliseconds
+   * 
+   * @param model - Model ID to check
+   * @returns Remaining cooldown in ms, or 0 if not on cooldown
+   */
+  public getCooldownRemaining(model: string): number {
+    const entry = this.cooldownMap.get(model);
+    if (!entry) return 0;
+    
+    const remaining = entry.expiresAt - Date.now();
+    if (remaining <= 0) {
+      this.cooldownMap.delete(model);
+      return 0;
+    }
+    
+    return remaining;
+  }
+  
+  /**
+   * Add a model to the cooldown list
+   * 
+   * @param model - Model ID to add to cooldown
+   * @param reason - Reason for the cooldown (e.g., error message)
+   * @param durationMs - Optional custom cooldown duration
+   */
+  public addToCooldown(model: string, reason: string, durationMs?: number): void {
+    this.cooldownMap.set(model, {
+      expiresAt: Date.now() + (durationMs ?? this.cooldownMs),
+      reason,
+    });
+  }
+  
+  /**
+   * Remove a model from cooldown (e.g., if it's working again)
+   * 
+   * @param model - Model ID to remove from cooldown
+   */
+  public removeFromCooldown(model: string): void {
+    this.cooldownMap.delete(model);
+  }
+  
+  /**
+   * Get all models currently on cooldown
+   * 
+   * @returns Map of model IDs to their cooldown info
+   */
+  public getCooldownStatus(): Map<string, { remainingMs: number; reason: string }> {
+    const status = new Map<string, { remainingMs: number; reason: string }>();
+    const now = Date.now();
+    
+    for (const [model, entry] of this.cooldownMap) {
+      const remaining = entry.expiresAt - now;
+      if (remaining > 0) {
+        status.set(model, { remainingMs: remaining, reason: entry.reason });
+      } else {
+        // Clean up expired entries
+        this.cooldownMap.delete(model);
+      }
+    }
+    
+    return status;
+  }
+  
+  /**
+   * Build the queue of models to try, respecting cooldowns
+   * 
+   * @param primaryModel - The primary model requested
+   * @returns Ordered array of models to try
+   */
+  public buildModelQueue(primaryModel: string): string[] {
+    const queue: string[] = [];
+    
+    // Add primary model first if not on cooldown
+    if (!this.isModelOnCooldown(primaryModel)) {
+      queue.push(primaryModel);
+    }
+    
+    // Add fallback models that aren't on cooldown
+    for (const model of this.fallbackModels) {
+      // Skip if it's the primary (already added) or on cooldown
+      if (model === primaryModel) continue;
+      if (this.isModelOnCooldown(model)) continue;
+      queue.push(model);
+    }
+    
+    // If primary was on cooldown but we have no fallbacks, add it anyway
+    // (better to try and fail than to give up immediately)
+    if (queue.length === 0 && this.isModelOnCooldown(primaryModel)) {
+      queue.push(primaryModel);
+    }
+    
+    return queue;
+  }
+  
+  /**
+   * Execute an operation with automatic model fallback
+   * 
+   * Tries the primary model first, and if it fails with a rate limit error,
+   * automatically tries fallback models in order.
+   * 
+   * @param primaryModel - The primary model to try first
+   * @param operation - Function that performs the API call with the given model
+   * @param logger - Optional logger for debugging
+   * @returns Result including which model was used and all attempts
+   * @throws FallbackExhaustedError if all models fail
+   * 
+   * @example
+   * ```ts
+   * const result = await manager.executeWithFallback(
+   *   'claude-opus-4-5',
+   *   async (model) => {
+   *     return await puter.ai.chat(messages, { model });
+   *   },
+   *   logger
+   * );
+   * ```
+   */
+  public async executeWithFallback<T>(
+    primaryModel: string,
+    operation: (model: string) => Promise<T>,
+    logger?: Logger
+  ): Promise<FallbackResult<T>> {
+    // If fallback is disabled, just run the operation directly
+    if (!this.enabled) {
+      const startTime = Date.now();
+      try {
+        const result = await operation(primaryModel);
+        return {
+          result,
+          usedModel: primaryModel,
+          wasFallback: false,
+          attempts: [{
+            model: primaryModel,
+            success: true,
+            durationMs: Date.now() - startTime,
+          }],
+        };
+      } catch (error) {
+        throw error;
+      }
+    }
+    
+    const modelQueue = this.buildModelQueue(primaryModel);
+    const attempts: FallbackAttempt[] = [];
+    
+    logger?.debug('Fallback queue built', { 
+      primary: primaryModel, 
+      queue: modelQueue.join(', '),
+      cooldowns: this.cooldownMap.size,
+    });
+    
+    for (const model of modelQueue) {
+      const startTime = Date.now();
+      const isFallback = model !== primaryModel;
+      
+      if (isFallback) {
+        logger?.info(`Trying fallback model: ${model}`);
+      }
+      
+      try {
+        const result = await operation(model);
+        
+        // Success! If this was a fallback, log it
+        if (isFallback) {
+          logger?.info(`Fallback model succeeded: ${model}`);
+        }
+        
+        attempts.push({
+          model,
+          success: true,
+          durationMs: Date.now() - startTime,
+        });
+        
+        return {
+          result,
+          usedModel: model,
+          wasFallback: isFallback,
+          attempts,
+        };
+      } catch (error) {
+        const durationMs = Date.now() - startTime;
+        const isRateLimit = isRateLimitError(error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        attempts.push({
+          model,
+          success: false,
+          error: errorMessage,
+          isRateLimit,
+          durationMs,
+        });
+        
+        if (isRateLimit) {
+          // Add to cooldown and continue to next model
+          this.addToCooldown(model, errorMessage);
+          const cooldownSecs = Math.round(this.cooldownMs / 1000);
+          logger?.warn(`Model ${model} rate limited, cooldown ${cooldownSecs}s`);
+        } else {
+          // Non-rate-limit error - might be a real problem
+          // Still try fallbacks but log it differently
+          logger?.warn(`Model ${model} failed: ${errorMessage}`);
+        }
+        
+        // Continue to next model in queue
+      }
+    }
+    
+    // All models exhausted
+    logger?.error('All models exhausted', new FallbackExhaustedError(attempts));
+    throw new FallbackExhaustedError(attempts);
+  }
+  
+  /**
+   * Clear all cooldowns (useful for testing or manual reset)
+   */
+  public clearCooldowns(): void {
+    this.cooldownMap.clear();
+  }
+  
+  /**
+   * Update configuration
+   */
+  public configure(options: Partial<FallbackOptions>): void {
+    if (options.fallbackModels !== undefined) {
+      this.fallbackModels = options.fallbackModels;
+    }
+    if (options.cooldownMs !== undefined) {
+      this.cooldownMs = options.cooldownMs;
+    }
+    if (options.enabled !== undefined) {
+      this.enabled = options.enabled;
+    }
+  }
+  
+  /**
+   * Get current configuration
+   */
+  public getConfig(): Required<FallbackOptions> {
+    return {
+      fallbackModels: [...this.fallbackModels],
+      cooldownMs: this.cooldownMs,
+      enabled: this.enabled,
+    };
+  }
+}
+
+/**
+ * Global FallbackManager instance shared across all model instances.
+ * This ensures cooldown state is consistent across the application.
+ */
+let globalFallbackManager: FallbackManager | null = null;
+
+/**
+ * Get the global FallbackManager instance, creating it if needed
+ * 
+ * @param options - Configuration options (only used when creating)
+ * @returns The global FallbackManager instance
+ */
+export function getGlobalFallbackManager(options?: FallbackOptions): FallbackManager {
+  if (!globalFallbackManager) {
+    globalFallbackManager = new FallbackManager(options);
+  } else if (options) {
+    // Update config if options provided
+    globalFallbackManager.configure(options);
+  }
+  return globalFallbackManager;
+}
+
+/**
+ * Reset the global FallbackManager (useful for testing)
+ */
+export function resetGlobalFallbackManager(): void {
+  globalFallbackManager = null;
+}

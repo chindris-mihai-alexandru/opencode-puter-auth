@@ -363,6 +363,77 @@ Create `~/.config/opencode/puter.json` for advanced settings:
 | `auto_create_temp_user` | `true` | Auto-create temp account |
 | `max_retries` | `3` | Retry failed requests |
 | `cache_ttl_ms` | `300000` | Model list cache TTL (5 min) |
+| `fallback_enabled` | `true` | Enable automatic model fallback on rate limits |
+| `fallback_models` | See below | Custom list of fallback models |
+| `fallback_cooldown_ms` | `60000` | Cooldown period for rate-limited models (1 min) |
+
+## Automatic Model Fallback
+
+When a model returns HTTP 429 (rate limited) or 403 (forbidden), the plugin automatically tries free OpenRouter models. This keeps your workflow running even when premium models are temporarily unavailable.
+
+### How It Works
+
+1. You request a model (e.g., `claude-opus-4-5`)
+2. If that model returns a rate limit error, it goes into "cooldown"
+3. The plugin automatically tries the next available free model
+4. A warning is logged showing which fallback model was used
+5. Your request completes without manual intervention
+
+### Default Fallback Models
+
+When rate limits are hit, these free models are tried in order:
+
+| Priority | Model | Description |
+|----------|-------|-------------|
+| 1 | `openrouter:xiaomi/mimo-v2-flash:free` | #1 on SWE-bench, Claude Sonnet 4.5 level |
+| 2 | `openrouter:deepseek/deepseek-r1-0528:free` | o1-level reasoning |
+| 3 | `openrouter:mistralai/devstral-2512:free` | Agentic coding specialist |
+| 4 | `openrouter:qwen/qwen3-coder:free` | 480B MoE coding model |
+| 5 | `openrouter:google/gemini-2.0-flash-exp:free` | 1M context, fast |
+| 6 | `openrouter:meta-llama/llama-4-maverick:free` | General purpose |
+| 7 | `openrouter:openai/gpt-oss-120b:free` | OpenAI open weights |
+
+### Configuration
+
+In `~/.config/opencode/puter.json`:
+
+```json
+{
+  "fallback_enabled": true,
+  "fallback_cooldown_ms": 60000,
+  "fallback_models": [
+    "openrouter:xiaomi/mimo-v2-flash:free",
+    "openrouter:deepseek/deepseek-r1-0528:free",
+    "openrouter:mistralai/devstral-2512:free"
+  ]
+}
+```
+
+### Disable Fallback
+
+To disable fallback globally:
+
+```json
+{
+  "fallback_enabled": false
+}
+```
+
+To disable fallback for a specific request (programmatic usage):
+
+```typescript
+import { createPuter } from 'opencode-puter-auth';
+
+const puter = createPuter({ authToken: 'your-token' });
+const model = puter('claude-opus-4-5', { disableFallback: true });
+```
+
+### Cooldown Behavior
+
+- Rate-limited models are put on cooldown for `fallback_cooldown_ms` (default: 1 minute)
+- Models on cooldown are skipped in favor of available models
+- Cooldown automatically expires, allowing the model to be retried
+- If all models (including fallbacks) are exhausted, the original error is thrown
 
 ### Debug Logging
 
@@ -388,6 +459,15 @@ Auth state changes:
 ```
 [puter-auth] 15:30:45 Auth: Account added - username
 [puter-auth] 15:30:45 Auth: Switched account - other_user
+```
+
+Fallback behavior:
+
+```
+[puter-auth] 15:30:45 Request: claude-opus-4-5
+[puter-auth] 15:30:45 Rate limited (429), adding to cooldown
+[puter-auth] 15:30:45 Fallback: trying openrouter:xiaomi/mimo-v2-flash:free
+[puter-auth] 15:30:47 Response: 200 OK (used fallback model)
 ```
 
 ## Custom Tools

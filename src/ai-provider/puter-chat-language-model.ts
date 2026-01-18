@@ -3,6 +3,8 @@
  * 
  * Implements the AI SDK LanguageModelV3 interface using the official @heyputer/puter.js SDK.
  * This enables Puter to work as a proper AI SDK provider in OpenCode.
+ * 
+ * Features automatic model fallback when rate limits are encountered.
  */
 
 import type {
@@ -22,6 +24,11 @@ import type {
   SharedV3Warning,
 } from '@ai-sdk/provider';
 import type { PuterChatSettings, PuterChatConfig } from './puter-chat-settings.js';
+import { 
+  getGlobalFallbackManager, 
+  type FallbackManager,
+} from '../fallback.js';
+import { createLogger, type Logger } from '../logger.js';
 
 // Type definitions for Puter SDK responses
 interface PuterUsage {
@@ -121,6 +128,11 @@ interface PuterSDK {
 /**
  * Puter Chat Language Model implementing LanguageModelV3.
  * Uses the official @heyputer/puter.js SDK for all API calls.
+ * 
+ * Features automatic model fallback when rate limits are encountered:
+ * - Detects rate limit errors (429, 403)
+ * - Automatically switches to free OpenRouter models
+ * - Tracks model cooldowns to avoid repeated failures
  */
 export class PuterChatLanguageModel implements LanguageModelV3 {
   readonly specificationVersion = 'v3' as const;
@@ -130,6 +142,8 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
   private readonly settings: PuterChatSettings;
   private readonly config: PuterChatConfig;
   private puterInstance: PuterSDK | null = null;
+  private readonly fallbackManager: FallbackManager;
+  private readonly logger: Logger;
 
   constructor(
     modelId: string,
@@ -140,6 +154,12 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
     this.settings = settings;
     this.config = config;
     this.provider = config.provider;
+    
+    // Initialize fallback manager with config options
+    this.fallbackManager = getGlobalFallbackManager(config.fallback);
+    
+    // Create logger (uses console by default, can be configured)
+    this.logger = createLogger({ debug: false }); // Will be quiet unless debug enabled
   }
 
   /**
@@ -276,8 +296,16 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
 
   /**
    * Build options for Puter SDK chat call.
+   * 
+   * @param options - AI SDK call options
+   * @param streaming - Whether to enable streaming
+   * @param modelOverride - Optional model to use instead of this.modelId (for fallback)
    */
-  private buildSDKOptions(options: LanguageModelV3CallOptions, streaming: boolean): PuterSDKOptions {
+  private buildSDKOptions(
+    options: LanguageModelV3CallOptions, 
+    streaming: boolean,
+    modelOverride?: string
+  ): PuterSDKOptions {
     // Filter to only function tools
     const functionTools = options.tools?.filter(
       (tool): tool is LanguageModelV3FunctionTool => tool.type === 'function'
@@ -285,7 +313,7 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
     const tools = this.convertTools(functionTools);
 
     const sdkOptions: PuterSDKOptions = {
-      model: this.modelId,
+      model: modelOverride ?? this.modelId,
       stream: streaming,
     };
 
@@ -370,14 +398,51 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
 
   /**
    * Non-streaming generation using Puter SDK.
+   * 
+   * Automatically falls back to alternative models when rate limits are hit,
+   * unless `disableFallback` is set in settings.
    */
   async doGenerate(options: LanguageModelV3CallOptions): Promise<LanguageModelV3GenerateResult> {
     const puter = await this.initPuterSDK();
     const messages = this.convertPromptToMessages(options.prompt);
-    const sdkOptions = this.buildSDKOptions(options, false);
     const warnings: SharedV3Warning[] = [];
-
-    const response = await puter.ai.chat(messages, sdkOptions) as PuterChatResponse;
+    
+    // Check if fallback is disabled for this request
+    const useFallback = !this.settings.disableFallback;
+    
+    // Define the operation that will be executed (possibly with fallback)
+    const executeChat = async (model: string): Promise<PuterChatResponse> => {
+      const sdkOptions = this.buildSDKOptions(options, false, model);
+      return await puter.ai.chat(messages, sdkOptions) as PuterChatResponse;
+    };
+    
+    let response: PuterChatResponse;
+    let actualModelUsed = this.modelId;
+    let wasFallback = false;
+    
+    if (useFallback) {
+      // Execute with fallback support
+      const fallbackResult = await this.fallbackManager.executeWithFallback(
+        this.modelId,
+        executeChat,
+        this.logger
+      );
+      response = fallbackResult.result;
+      actualModelUsed = fallbackResult.usedModel;
+      wasFallback = fallbackResult.wasFallback;
+      
+      if (wasFallback) {
+        // Add a warning that fallback was used
+        warnings.push({
+          type: 'other',
+          message: `Model ${this.modelId} rate limited, used fallback: ${actualModelUsed}`,
+        } as SharedV3Warning);
+      }
+    } else {
+      // Execute without fallback
+      const sdkOptions = this.buildSDKOptions(options, false);
+      response = await puter.ai.chat(messages, sdkOptions) as PuterChatResponse;
+    }
 
     const content: LanguageModelV3Content[] = [];
 
@@ -421,7 +486,7 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
       finishReason: this.mapFinishReason(response.finish_reason),
       usage: this.mapUsage(response.usage),
       warnings,
-      request: { body: { messages, options: sdkOptions } },
+      request: { body: { messages, model: actualModelUsed } },
       response: {
         body: response,
       },
@@ -430,15 +495,50 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
 
   /**
    * Streaming generation using Puter SDK.
+   * 
+   * Automatically falls back to alternative models when rate limits are hit,
+   * unless `disableFallback` is set in settings.
    */
   async doStream(options: LanguageModelV3CallOptions): Promise<LanguageModelV3StreamResult> {
     const puter = await this.initPuterSDK();
     const messages = this.convertPromptToMessages(options.prompt);
-    const sdkOptions = this.buildSDKOptions(options, true);
     const warnings: SharedV3Warning[] = [];
     const generateId = this.config.generateId;
-
-    const streamResponse = await puter.ai.chat(messages, sdkOptions) as AsyncIterable<PuterStreamChunk>;
+    
+    // Check if fallback is disabled for this request
+    const useFallback = !this.settings.disableFallback;
+    
+    // Define the operation that initiates the stream
+    const initiateStream = async (model: string): Promise<AsyncIterable<PuterStreamChunk>> => {
+      const sdkOptions = this.buildSDKOptions(options, true, model);
+      return await puter.ai.chat(messages, sdkOptions) as AsyncIterable<PuterStreamChunk>;
+    };
+    
+    let streamResponse: AsyncIterable<PuterStreamChunk>;
+    let actualModelUsed = this.modelId;
+    
+    if (useFallback) {
+      // Execute stream initiation with fallback support
+      const fallbackResult = await this.fallbackManager.executeWithFallback(
+        this.modelId,
+        initiateStream,
+        this.logger
+      );
+      streamResponse = fallbackResult.result;
+      actualModelUsed = fallbackResult.usedModel;
+      
+      if (fallbackResult.wasFallback) {
+        // Add a warning that fallback was used
+        warnings.push({
+          type: 'other',
+          message: `Model ${this.modelId} rate limited, used fallback: ${actualModelUsed}`,
+        } as SharedV3Warning);
+      }
+    } else {
+      // Execute without fallback
+      const sdkOptions = this.buildSDKOptions(options, true);
+      streamResponse = await puter.ai.chat(messages, sdkOptions) as AsyncIterable<PuterStreamChunk>;
+    }
 
     // Create a transform stream to convert Puter chunks to AI SDK format
     const self = this;
@@ -503,7 +603,7 @@ export class PuterChatLanguageModel implements LanguageModelV3 {
 
     return {
       stream,
-      request: { body: { messages, options: sdkOptions } },
+      request: { body: { messages, model: actualModelUsed } },
     };
   }
 }

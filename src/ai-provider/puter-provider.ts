@@ -130,6 +130,7 @@ export function createPuter(options: PuterProviderConfig = {}): PuterProvider {
     headers: getHeaders,
     fetch: fetchFn,
     generateId: generateIdFn,
+    fallback: options.fallback,
   });
 
   /**

@@ -4,6 +4,8 @@
  * Configuration options for the Puter chat language model.
  */
 
+import type { FallbackOptions } from '../fallback.js';
+
 /**
  * Settings for the Puter chat model.
  */
@@ -46,6 +48,14 @@ export interface PuterChatSettings {
    * @default true
    */
   stream?: boolean;
+  
+  /**
+   * Disable automatic model fallback for this request.
+   * When true, rate limit errors will be thrown immediately without
+   * trying fallback models.
+   * @default false
+   */
+  disableFallback?: boolean;
 }
 
 /**
@@ -93,6 +103,12 @@ export interface PuterProviderConfig {
    * Used for tool call IDs and other identifiers.
    */
   generateId?: () => string;
+  
+  /**
+   * Fallback configuration options.
+   * Controls automatic model fallback when rate limits are encountered.
+   */
+  fallback?: FallbackOptions;
 }
 
 /**
@@ -129,4 +145,10 @@ export interface PuterChatConfig {
    * Function to generate unique IDs.
    */
   generateId: () => string;
+  
+  /**
+   * Fallback configuration options.
+   * Controls automatic model fallback when rate limits are encountered.
+   */
+  fallback?: FallbackOptions;
 }
