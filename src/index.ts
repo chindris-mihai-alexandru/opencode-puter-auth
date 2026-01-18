@@ -24,6 +24,10 @@ export { createPuter as default } from './ai-provider/index.js';
 export { createPuter } from './ai-provider/index.js';
 export type { PuterProvider, PuterChatSettings, PuterProviderConfig, PuterChatConfig } from './ai-provider/index.js';
 
+// Logger exports for debug mode
+export { createLogger, createLoggerFromConfig, nullLogger, LogLevel } from './logger.js';
+export type { Logger, LoggerOptions } from './logger.js';
+
 // Type exports for TypeScript users (these don't cause runtime issues)
 export type { PuterConfig, PuterAccount, PuterChatOptions, PuterChatResponse, PuterChatMessage, PuterChatStreamChunk, PuterModelInfo } from './types.js';
 

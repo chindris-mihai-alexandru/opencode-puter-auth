@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/chindrismihai)
 
-> Access Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, DeepSeek, and 500+ AI models through Puter.com OAuth. No API keys needed - free tier available with undocumented limits.
+> Access Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, DeepSeek, and 500+ AI models through Puter.com OAuth. Includes 400+ FREE OpenRouter models. No API keys needed - free tier available with undocumented limits.
 
 Enable OpenCode to authenticate with [Puter.com](https://puter.com) via OAuth, giving you access to premium AI models through your Puter account. Ideal for app developers using the "User-Pays" model where each user covers their own AI costs.
 
@@ -16,6 +16,7 @@ Enable OpenCode to authenticate with [Puter.com](https://puter.com) via OAuth, g
 - **Gemini 2.5 Pro** - 1M context window
 - **DeepSeek R1** - Advanced reasoning model
 - **500+ More Models** - Mistral, Llama, Grok, and more
+- **400+ FREE OpenRouter Models** - Including MiMo-V2-Flash (#1 on SWE-bench), Qwen3 Coder, and GPT-OSS
 - **Real-time SSE Streaming** - Full streaming support
 - **Tool Calling** - Native function calling support
 - **Vision Support** - Image analysis capabilities
@@ -205,6 +206,114 @@ opencode --model=puter/claude-opus-4-5
 |-------|-------------|---------|----------|
 | `puter/deepseek-r1` | Advanced reasoning | 128K | Complex problem solving |
 
+## OpenRouter Models (400+ Free Models via Puter)
+
+Puter acts as a gateway to **OpenRouter**, giving you access to 400+ additional models. Many of these have FREE tiers (`:free` suffix) with more generous limits than premium models.
+
+### How It Works
+
+Use the `openrouter:` prefix to access any OpenRouter model through Puter:
+
+```bash
+# Format: puter/openrouter:provider/model-name
+opencode --model=puter/openrouter:deepseek/deepseek-r1-0528:free
+```
+
+### Configuration for OpenRouter Models
+
+Add these to your `opencode.json` models section:
+
+```json
+{
+  "provider": {
+    "puter": {
+      "npm": "opencode-puter-auth",
+      "name": "Puter.com (500+ AI Models)",
+      "models": {
+        "openrouter:xiaomi/mimo-v2-flash:free": {
+          "name": "MiMo-V2-Flash (Free - Best Open Source)",
+          "limit": { "context": 262000, "output": 32768 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        },
+        "openrouter:mistralai/devstral-2512:free": {
+          "name": "Devstral 2 (Free - Agentic Coding)",
+          "limit": { "context": 262000, "output": 32768 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        },
+        "openrouter:deepseek/deepseek-r1-0528:free": {
+          "name": "DeepSeek R1 0528 (Free - o1-level Reasoning)",
+          "limit": { "context": 164000, "output": 32768 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        },
+        "openrouter:qwen/qwen3-coder:free": {
+          "name": "Qwen3 Coder 480B (Free - Massive Coder)",
+          "limit": { "context": 262000, "output": 32768 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        },
+        "openrouter:meta-llama/llama-3.3-70b-instruct:free": {
+          "name": "Llama 3.3 70B (Free - Multilingual)",
+          "limit": { "context": 131000, "output": 32768 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        },
+        "openrouter:google/gemma-3-27b-it:free": {
+          "name": "Gemma 3 27B (Free - Multimodal)",
+          "limit": { "context": 131000, "output": 32768 },
+          "modalities": { "input": ["text", "image"], "output": ["text"] }
+        },
+        "openrouter:openai/gpt-oss-120b:free": {
+          "name": "GPT-OSS 120B (Free - OpenAI Open Weights)",
+          "limit": { "context": 131000, "output": 32768 },
+          "modalities": { "input": ["text"], "output": ["text"] }
+        },
+        "openrouter:google/gemini-2.0-flash-exp:free": {
+          "name": "Gemini 2.0 Flash Exp (Free - 1M Context)",
+          "limit": { "context": 1050000, "output": 65536 },
+          "modalities": { "input": ["text", "image"], "output": ["text"] }
+        }
+      }
+    }
+  }
+}
+```
+
+### Top Free OpenRouter Models (January 2026)
+
+These models are completely FREE via Puter's OpenRouter gateway:
+
+| Model | Parameters | Context | Best For |
+|-------|------------|---------|----------|
+| `puter/openrouter:xiaomi/mimo-v2-flash:free` | 309B MoE | 262K | **#1 on SWE-bench** - Comparable to Claude Sonnet 4.5 |
+| `puter/openrouter:mistralai/devstral-2512:free` | 123B | 262K | Agentic coding, multi-file changes |
+| `puter/openrouter:deepseek/deepseek-r1-0528:free` | 671B MoE | 164K | o1-level reasoning, fully open-source |
+| `puter/openrouter:qwen/qwen3-coder:free` | 480B MoE | 262K | Massive coding model, tool use |
+| `puter/openrouter:openai/gpt-oss-120b:free` | 117B MoE | 131K | OpenAI's open-weight model |
+| `puter/openrouter:openai/gpt-oss-20b:free` | 21B MoE | 131K | Lightweight, single-GPU deployable |
+| `puter/openrouter:meta-llama/llama-3.3-70b-instruct:free` | 70B | 131K | Multilingual, general purpose |
+| `puter/openrouter:google/gemma-3-27b-it:free` | 27B | 131K | Vision + 140 languages |
+| `puter/openrouter:google/gemini-2.0-flash-exp:free` | - | 1M | Fastest Gemini, huge context |
+| `puter/openrouter:nousresearch/hermes-3-llama-3.1-405b:free` | 405B | 131K | Frontier-level, agentic |
+
+### Why Use OpenRouter Models?
+
+1. **More Generous Free Limits** - The `:free` models often have better rate limits than premium Puter models
+2. **Open Source** - Many are fully open-source with transparent weights
+3. **Specialized** - Models optimized for specific tasks (coding, reasoning, etc.)
+4. **Fallback Options** - When premium models are rate-limited, fall back to free alternatives
+
+### Accessing Any OpenRouter Model
+
+You can use ANY model from [OpenRouter's catalog](https://openrouter.ai/models) by adding it to your config:
+
+```json
+"openrouter:anthropic/claude-opus-4.5": {
+  "name": "Claude Opus 4.5 (via OpenRouter)",
+  "limit": { "context": 200000, "output": 64000 },
+  "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+}
+```
+
+Note: Non-free models will consume your Puter credits based on OpenRouter pricing.
+
 ## AI SDK Provider (Standalone Usage)
 
 You can also use the Puter AI SDK provider directly in your own applications:
@@ -241,17 +350,45 @@ Create `~/.config/opencode/puter.json` for advanced settings:
   "debug": false,
   "api_timeout_ms": 120000,
   "auto_create_temp_user": true,
-  "max_retries": 3
+  "max_retries": 3,
+  "cache_ttl_ms": 300000
 }
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `quiet_mode` | `false` | Suppress status messages |
-| `debug` | `false` | Enable debug logging |
+| `debug` | `false` | Enable verbose debug logging (see below) |
 | `api_timeout_ms` | `120000` | Request timeout (2 min) |
 | `auto_create_temp_user` | `true` | Auto-create temp account |
 | `max_retries` | `3` | Retry failed requests |
+| `cache_ttl_ms` | `300000` | Model list cache TTL (5 min) |
+
+### Debug Logging
+
+When `debug: true` is set, the plugin outputs detailed logs with timestamps:
+
+```
+[puter-auth] 15:30:45 Request: POST /drivers/call method=complete model=claude-opus-4-5 stream=true messages=3
+[puter-auth] 15:30:45 Stream connected duration=234ms
+[puter-auth] 15:30:47 Response: 200 Stream complete (2.1s)
+```
+
+If a request fails and retries:
+
+```
+[puter-auth] 15:30:45 Request: POST /drivers/call method=complete model=claude-opus-4-5
+[puter-auth] 15:30:45 Retry 1/3: Rate limited (429), waiting 1000ms
+[puter-auth] 15:30:46 Retry 2/3: Rate limited (429), waiting 2000ms
+[puter-auth] 15:30:48 Response: 200 OK (3.2s)
+```
+
+Auth state changes:
+
+```
+[puter-auth] 15:30:45 Auth: Account added - username
+[puter-auth] 15:30:45 Auth: Switched account - other_user
+```
 
 ## Custom Tools
 
@@ -362,11 +499,12 @@ The new standalone provider offers:
 This means your Puter account has exhausted its free tier credits. Despite Puter's "Free Unlimited" marketing, limits do exist.
 
 **Solutions:**
-1. **Wait** - Limits may reset (timing undocumented)
-2. **Add credits** on [Puter.com](https://puter.com) (paid)
-3. **New account** - Create a new Puter account (new accounts get free credits)
-4. **Switch providers** - Use Antigravity, OpenRouter free tier, or other free providers
-5. **Use lighter models** - Haiku/Flash models may consume fewer credits than Opus
+1. **Switch to FREE OpenRouter models** - Use `puter/openrouter:xiaomi/mimo-v2-flash:free` or other `:free` models (see OpenRouter section above)
+2. **Wait** - Limits may reset (timing undocumented)
+3. **Add credits** on [Puter.com](https://puter.com) (paid)
+4. **New account** - Create a new Puter account (new accounts get free credits)
+5. **Switch providers** - Use Antigravity, OpenRouter free tier, or other free providers
+6. **Use lighter models** - Haiku/Flash models may consume fewer credits than Opus
 
 ### Clear cached plugin and reinstall
 

@@ -19,6 +19,7 @@ import type {
   PuterConfig,
 } from './types.js';
 import { PuterAccountsStorageSchema } from './types.js';
+import { createLoggerFromConfig, type Logger } from './logger.js';
 
 const DEFAULT_CALLBACK_PORT = 19847;
 const AUTH_TIMEOUT_MS = 300000; // 5 minutes
@@ -199,18 +200,23 @@ class PuterAuthManagerInternal {
   private configDir: string;
   private accountsFile: string;
   private storage: PuterAccountsStorage | null = null;
+  private logger: Logger;
 
-  constructor(configDir: string, _config: Partial<PuterConfig> = {}) {
+  constructor(configDir: string, config: Partial<PuterConfig> = {}) {
     this.configDir = configDir;
     this.accountsFile = path.join(configDir, 'puter-accounts.json');
+    this.logger = createLoggerFromConfig(config);
   }
 
   /**
    * Initialize the auth manager and load existing accounts
    */
   public async init(): Promise<void> {
+    this.logger.debug('Initializing auth manager');
     await this.ensureConfigDir();
     await this.loadAccounts();
+    const accountCount = this.storage?.accounts.length || 0;
+    this.logger.debug('Auth manager initialized', { accounts: accountCount });
   }
 
   /**
@@ -410,10 +416,12 @@ class PuterAuthManagerInternal {
       // Update existing
       this.storage.accounts[existingIndex] = account;
       this.storage.activeIndex = existingIndex;
+      this.logger.auth('Account updated', account.username);
     } else {
       // Add new
       this.storage.accounts.push(account);
       this.storage.activeIndex = this.storage.accounts.length - 1;
+      this.logger.auth('Account added', account.username);
     }
 
     await this.saveAccounts();
@@ -424,11 +432,14 @@ class PuterAuthManagerInternal {
    */
   public async switchAccount(index: number): Promise<boolean> {
     if (!this.storage || index < 0 || index >= this.storage.accounts.length) {
+      this.logger.warn('Invalid account switch attempt', { index });
       return false;
     }
     
     this.storage.activeIndex = index;
     await this.saveAccounts();
+    const username = this.storage.accounts[index]?.username;
+    this.logger.auth('Switched account', username);
     return true;
   }
 
@@ -437,9 +448,11 @@ class PuterAuthManagerInternal {
    */
   public async removeAccount(index: number): Promise<boolean> {
     if (!this.storage || index < 0 || index >= this.storage.accounts.length) {
+      this.logger.warn('Invalid account remove attempt', { index });
       return false;
     }
 
+    const username = this.storage.accounts[index]?.username;
     this.storage.accounts.splice(index, 1);
     
     if (this.storage.activeIndex >= this.storage.accounts.length) {
@@ -447,6 +460,7 @@ class PuterAuthManagerInternal {
     }
     
     await this.saveAccounts();
+    this.logger.auth('Account removed', username);
     return true;
   }
 
@@ -465,6 +479,7 @@ class PuterAuthManagerInternal {
    * Logout - remove all accounts
    */
   public async logout(): Promise<void> {
+    this.logger.auth('Logging out', 'all accounts');
     this.storage = {
       version: 1,
       accounts: [],

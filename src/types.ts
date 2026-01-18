@@ -45,6 +45,9 @@ export const PuterConfigSchema = z.object({
   
   // Stream Settings
   stream_buffer_size: z.number().default(1024),
+  
+  // Cache Settings
+  cache_ttl_ms: z.number().default(300000), // 5 minutes
 });
 
 export type PuterConfig = z.infer<typeof PuterConfigSchema>;
