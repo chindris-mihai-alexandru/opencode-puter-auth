@@ -2,8 +2,8 @@
 
 [![npm version](https://img.shields.io/npm/v/opencode-puter-auth.svg)](https://www.npmjs.com/package/opencode-puter-auth)
 [![CI](https://github.com/Mihai-Codes/opencode-puter-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/Mihai-Codes/opencode-puter-auth/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Mihai-Codes/opencode-puter-auth/graph/badge.svg)](https://codecov.io/gh/Mihai-Codes/opencode-puter-auth)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/chindrismihai)
 
 > Access Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, DeepSeek, and 500+ AI models through Puter.com OAuth. Includes 400+ FREE OpenRouter models. No API keys needed - free tier available with undocumented limits.
 
