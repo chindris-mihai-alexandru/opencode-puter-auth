@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/chindrismihai)
 
-> Access Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, DeepSeek, and 500+ AI models through Puter.com - no API keys needed.
+> Access Claude Opus 4.5, Sonnet 4.5, GPT-5, Gemini, DeepSeek, and 500+ AI models through Puter.com OAuth. No API keys needed - free tier available with undocumented limits.
 
-Enable OpenCode to authenticate with [Puter.com](https://puter.com) via OAuth, giving you easy access to premium AI models through your Puter account.
+Enable OpenCode to authenticate with [Puter.com](https://puter.com) via OAuth, giving you access to premium AI models through your Puter account. Ideal for app developers using the "User-Pays" model where each user covers their own AI costs.
 
 ## What You Get
 
@@ -22,13 +22,36 @@ Enable OpenCode to authenticate with [Puter.com](https://puter.com) via OAuth, g
 
 ## How It Works
 
-Puter.com uses a **credit-based model**:
+Puter.com uses a **"User-Pays" model**:
 
 1. **No API keys** - Just sign in with your Puter account
-2. **Free credits** - New accounts get initial credits to start
-3. **Pay as you go** - Premium models consume credits; top up when needed
+2. **Users pay their own usage** - Each Puter account has its own credit allocation
+3. **Free tier available** - New accounts get free credits to start
+4. **Credits run out** - When exhausted, you pay Puter directly or create a new account
 
-> **Important:** Premium AI models (Claude, GPT, etc.) consume Puter credits. This is NOT unlimited - when credits run out, you can add more on Puter.com.
+> **Important Reality Check:** Puter's marketing says "Free, Unlimited" but this is misleading. In practice:
+> - Free tier limits exist but are **undocumented** ([GitHub Issue #1704](https://github.com/HeyPuter/puter/issues/1704))
+> - Users report limits trigger after "minimal usage" ([GitHub Issue #1291](https://github.com/HeyPuter/puter/issues/1291))
+> - When limits hit, you'll see: `"usage-limited-chat": Permission denied`
+
+## Understanding the "User-Pays" Model
+
+### For App Developers (Building apps for others)
+**Great fit!** Your infrastructure cost is $0. Each of YOUR users authenticates with their OWN Puter account and pays for their own AI usage.
+
+### For Personal/Development Use (Using it yourself)
+**Caution:** When YOU use this plugin during development, YOU are the user. YOUR Puter account's free tier gets consumed. Based on community reports, the free tier is limited and undocumented.
+
+### Free Tier Reality
+
+| Aspect | What Puter Claims | What Actually Happens |
+|--------|-------------------|----------------------|
+| **Pricing** | "Free, Unlimited" | Free tier exists but has limits |
+| **Limits** | "No usage restrictions" | Undocumented limits trigger unexpectedly |
+| **Documentation** | Not specified | Limits are not publicly documented |
+| **When exceeded** | Not mentioned | Error: `usage-limited-chat: Permission denied` |
+
+**Estimated free tier:** ~100 requests/day (unconfirmed, based on third-party reports)
 
 ## Installation
 
@@ -225,20 +248,33 @@ The plugin adds these tools to OpenCode:
 - **`puter-models`** - List all available Puter models
 - **`puter-account`** - Show current account info
 
-## Comparison: Puter vs Antigravity
+## Comparison: Puter vs Antigravity vs Alternatives
 
-| Feature | Puter | Antigravity |
-|---------|-------|-------------|
-| **Cost Model** | Credit-based | Weekly quotas |
-| **Claude Opus 4.5** | Yes (uses credits) | Limited weekly |
-| **Claude Sonnet 4.5** | Yes (uses credits) | Limited weekly |
-| **GPT-5** | Yes (uses credits) | No |
-| **DeepSeek R1** | Yes (uses credits) | No |
-| **Gemini 3** | No | Limited weekly |
-| **Provider Type** | Standalone (`puter/`) | Google piggyback (`google/`) |
-| **Initial Free Credits** | Yes (new accounts) | Weekly refresh |
+| Feature | Puter | Antigravity | Netlify AI Gateway |
+|---------|-------|-------------|-------------------|
+| **Free Quota** | Undocumented limits | ~300K tokens/day | 300 credits/mo |
+| **Limits Documented?** | No | Unofficial | Yes |
+| **Claude Opus 4.5** | Yes | Yes | Yes |
+| **Claude Sonnet 4.5** | Yes | Yes | Yes |
+| **GPT-5** | Yes | No | No |
+| **DeepSeek R1** | Yes | No | No |
+| **Gemini 3** | No | Yes | No |
+| **Best For** | App builders | Dev work | Very light use |
 
-**Bottom line**: Use **Puter** if you want access to Claude/GPT/DeepSeek (credit-based). Use **Antigravity** for Gemini 3 (weekly quota).
+### Recommendations by Use Case
+
+| Use Case | Recommended Provider |
+|----------|---------------------|
+| **Building apps** (users pay their own usage) | **Puter** |
+| **Development/testing** (you are the user) | **Antigravity** (more predictable) |
+| **Heavy development work** | Paid API (Anthropic, OpenAI) |
+| **Occasional Claude access** | Puter (while free tier lasts) |
+| **GPT-5 / DeepSeek access** | **Puter** (only option) |
+
+**Bottom line**: 
+- Use **Puter** for building apps where your users authenticate with their own accounts
+- Use **Antigravity** for your own development (more predictable ~300K tokens/day)
+- Use **Puter** if you specifically need GPT-5 or DeepSeek (not available elsewhere free)
 
 ## Migrating from Old Config (v1.0.27 and earlier)
 
@@ -309,14 +345,16 @@ The new standalone provider offers:
 
 ## Troubleshooting
 
-### "You have reached your AI usage limit"
+### "usage-limited-chat: Permission denied" or "You have reached your AI usage limit"
 
-This means your Puter account has exhausted its credits. Premium AI models (Claude, GPT, etc.) consume credits.
+This means your Puter account has exhausted its free tier credits. Despite Puter's "Free Unlimited" marketing, limits do exist.
 
 **Solutions:**
-1. Add more credits on [Puter.com](https://puter.com)
-2. Use a different free provider (Antigravity, OpenRouter free tier, Cerebras, Groq)
-3. Create a new Puter account (new accounts get initial credits)
+1. **Wait** - Limits may reset (timing undocumented)
+2. **Add credits** on [Puter.com](https://puter.com) (paid)
+3. **New account** - Create a new Puter account (new accounts get free credits)
+4. **Switch providers** - Use Antigravity, OpenRouter free tier, or other free providers
+5. **Use lighter models** - Haiku/Flash models may consume fewer credits than Opus
 
 ### Clear cached plugin and reinstall
 
