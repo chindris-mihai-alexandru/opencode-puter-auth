@@ -750,7 +750,7 @@ Before your first PR can be merged, you'll need to sign our simple Contributor L
 ### Contributors
 
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors)
+[![All Contributors](https://img.shields.io/badge/all_contributors-3-orange.svg?style=flat-square)](#contributors)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 Thanks to these wonderful people:
@@ -762,6 +762,8 @@ Thanks to these wonderful people:
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/chindris-mihai-alexandru"><img src="https://avatars.githubusercontent.com/u/12643176?v=4?s=100" width="100px;" alt="Mihai Chindris"/><br /><sub><b>Mihai Chindris</b></sub></a><br /><a href="#code-chindris-mihai-alexandru" title="Code">💻</a> <a href="#doc-chindris-mihai-alexandru" title="Documentation">📖</a> <a href="#maintenance-chindris-mihai-alexandru" title="Maintenance">🚧</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/EldoDebug"><img src="https://avatars.githubusercontent.com/u/90662956?v=4?s=100" width="100px;" alt="EldoDebug"/><br /><sub><b>EldoDebug</b></sub></a><br /><a href="#ideas-EldoDebug" title="Ideas & Feedback">🤔</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/icytz"><img src="https://avatars.githubusercontent.com/u/168879974?v=4?s=100" width="100px;" alt="icytz"/><br /><sub><b>icytz</b></sub></a><br /><a href="#ideas-icytz" title="Ideas & Feedback">🤔</a></td>
     </tr>
   </tbody>
 </table>
@@ -775,13 +777,15 @@ Thanks to these wonderful people:
 
 If this plugin helps you, consider supporting its development:
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/chindrismihai)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/mihai_chindris)
 
 ## Credits
 
 - [Puter.com](https://puter.com) - The amazing "Internet Computer" platform with 500+ AI models
 - [OpenCode](https://opencode.ai) - The best AI coding agent
+- [OpenRouter](https://openrouter.ai) - Unified API for 400+ AI models with generous free tiers
 - [opencode-antigravity-auth](https://github.com/NoeFabris/opencode-antigravity-auth) - Inspiration for plugin architecture
+- [opencode-openai-codex-auth](https://github.com/numman-ali/opencode-openai-codex-auth) - Inspiration for installer and configuration patterns
 
 ## License
 
