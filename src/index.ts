@@ -46,6 +46,21 @@ export type {
   FallbackAttempt,
 } from './fallback.js';
 
+// Account Rotation Manager exports for multi-account support
+export {
+  AccountRotationManager,
+  getGlobalAccountRotationManager,
+  resetGlobalAccountRotationManager,
+  AllAccountsOnCooldownError,
+  DEFAULT_ACCOUNT_COOLDOWN_MS,
+} from './account-rotation.js';
+export type {
+  AccountRotationOptions,
+  AccountRotationResult,
+  AccountStatus,
+  IAuthManager,
+} from './account-rotation.js';
+
 // Type exports for TypeScript users (these don't cause runtime issues)
 export type { PuterConfig, PuterAccount, PuterChatOptions, PuterChatResponse, PuterChatMessage, PuterChatStreamChunk, PuterModelInfo } from './types.js';
 

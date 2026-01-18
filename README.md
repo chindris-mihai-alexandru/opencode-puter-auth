@@ -366,6 +366,9 @@ Create `~/.config/opencode/puter.json` for advanced settings:
 | `fallback_enabled` | `true` | Enable automatic model fallback on rate limits |
 | `fallback_models` | See below | Custom list of fallback models |
 | `fallback_cooldown_ms` | `60000` | Cooldown period for rate-limited models (1 min) |
+| `account_rotation_enabled` | `true` | Enable automatic account rotation |
+| `account_rotation_strategy` | `round-robin` | Strategy: `round-robin` or `least-recently-used` |
+| `account_rotation_cooldown_ms` | `300000` | Cooldown for rate-limited accounts (5 min) |
 
 ## Automatic Model Fallback
 
@@ -434,6 +437,117 @@ const model = puter('claude-opus-4-5', { disableFallback: true });
 - Models on cooldown are skipped in favor of available models
 - Cooldown automatically expires, allowing the model to be retried
 - If all models (including fallbacks) are exhausted, the original error is thrown
+
+## Account Rotation (Multi-Account Support)
+
+For even more resilience, you can configure multiple Puter accounts. When one account hits rate limits, the plugin automatically rotates to the next available account.
+
+### How It Works
+
+1. Add multiple Puter accounts using `puter-auth login`
+2. When the active account hits a rate limit, it goes into "cooldown"
+3. The plugin automatically switches to the next available account
+4. Your request continues without interruption
+5. Cooldown accounts become available again after the cooldown period
+
+### Adding Multiple Accounts
+
+```bash
+# Add your first account
+puter-auth login
+
+# Add additional accounts (opens browser for each)
+puter-auth login
+
+# View all accounts
+puter-auth status
+```
+
+### Rotation Strategies
+
+The plugin supports two rotation strategies:
+
+| Strategy | Description | Best For |
+|----------|-------------|----------|
+| `round-robin` (default) | Cycles through accounts in order | Even distribution |
+| `least-recently-used` | Picks the account used longest ago | Maximizing cooldown recovery |
+
+### Configuration
+
+In `~/.config/opencode/puter.json`:
+
+```json
+{
+  "account_rotation_enabled": true,
+  "account_rotation_strategy": "round-robin",
+  "account_rotation_cooldown_ms": 300000
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `account_rotation_enabled` | `true` | Enable automatic account rotation |
+| `account_rotation_strategy` | `round-robin` | Strategy: `round-robin` or `least-recently-used` |
+| `account_rotation_cooldown_ms` | `300000` | Cooldown duration for rate-limited accounts (5 min) |
+
+### Cooldown Behavior
+
+Account cooldowns use exponential backoff:
+- First rate limit: 1x cooldown (5 minutes)
+- Second consecutive: 2x cooldown (10 minutes)
+- Third consecutive: 3x cooldown (15 minutes)
+- Fourth+ consecutive: 4x cooldown (20 minutes max)
+
+This prevents hammering accounts that are consistently being rate-limited.
+
+### Fallback vs Rotation
+
+The plugin supports both **model fallback** and **account rotation**, and they work together:
+
+| Feature | Model Fallback | Account Rotation |
+|---------|---------------|------------------|
+| **Scope** | Different models, same account | Same model, different accounts |
+| **Use case** | Premium model unavailable | Account rate-limited |
+| **Default cooldown** | 1 minute | 5 minutes |
+| **Order of operations** | Tried first | Tried after fallback exhausted |
+
+When a request fails:
+1. First, model fallback tries different models on the current account
+2. If all models fail, account rotation switches to a different account
+3. Model fallback then runs again on the new account
+
+### Programmatic Usage
+
+```typescript
+import { 
+  AccountRotationManager, 
+  getGlobalAccountRotationManager,
+  AllAccountsOnCooldownError 
+} from 'opencode-puter-auth';
+
+// Get the global rotation manager
+const rotation = getGlobalAccountRotationManager(authManager, {
+  cooldownMs: 300000,
+  strategy: 'least-recently-used',
+});
+
+// Check current status
+const summary = rotation.getSummary();
+console.log(`${summary.availableAccounts}/${summary.totalAccounts} accounts available`);
+
+// Handle rate limit errors
+try {
+  await makeRequest();
+} catch (error) {
+  const result = await rotation.handleRateLimitError(error);
+  if (result) {
+    console.log(`Rotated to account: ${result.account.username}`);
+    await makeRequest(); // Retry with new account
+  } else {
+    throw new AllAccountsOnCooldownError(rotation.getAccountStatuses());
+  }
+}
+```
 
 ### Debug Logging
 

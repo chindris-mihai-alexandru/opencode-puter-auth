@@ -53,6 +53,11 @@ export const PuterConfigSchema = z.object({
   fallback_enabled: z.boolean().default(true),
   fallback_models: z.array(z.string()).optional(), // Uses DEFAULT_FALLBACK_MODELS if not set
   fallback_cooldown_ms: z.number().default(60000), // 1 minute
+  
+  // Account Rotation Settings
+  account_rotation_enabled: z.boolean().default(true),
+  account_rotation_strategy: z.enum(['round-robin', 'least-recently-used']).default('round-robin'),
+  account_rotation_cooldown_ms: z.number().default(300000), // 5 minutes
 });
 
 export type PuterConfig = z.infer<typeof PuterConfigSchema>;

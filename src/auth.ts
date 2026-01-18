@@ -1,11 +1,39 @@
 /**
  * Puter Authentication Manager
  * 
- * Handles OAuth authentication with Puter.com via browser popup
+ * Handles OAuth authentication with Puter.com via browser popup.
+ * Supports multiple accounts with automatic persistence and seamless switching.
+ * 
+ * Authentication Flow:
+ * 1. Start local HTTP server to serve auth HTML and receive callback
+ * 2. Open browser to the local server serving Puter SDK auth page
+ * 3. User signs in via Puter popup (puter.auth.signIn())
+ * 4. Page redirects to /callback with token and username
+ * 5. Token is stored locally and server shuts down
  * 
  * IMPORTANT: Puter uses popup-based auth (puter.auth.signIn()) which returns a token.
  * For CLI tools, we serve an HTML page that handles the popup auth flow,
  * then redirects to our local callback with the token.
+ * 
+ * @example
+ * ```ts
+ * import { createPuterAuthManager } from 'opencode-puter-auth';
+ * 
+ * const authManager = createPuterAuthManager('~/.config/opencode');
+ * await authManager.init();
+ * 
+ * if (!authManager.isAuthenticated()) {
+ *   const result = await authManager.login();
+ *   if (result.success) {
+ *     console.log('Logged in as:', result.account?.username);
+ *   }
+ * }
+ * 
+ * const account = authManager.getActiveAccount();
+ * console.log('Token:', account?.authToken);
+ * ```
+ * 
+ * @module auth
  */
 
 import { promises as fs } from 'node:fs';
@@ -21,8 +49,11 @@ import type {
 import { PuterAccountsStorageSchema } from './types.js';
 import { createLoggerFromConfig, type Logger } from './logger.js';
 
+/** Default port for the local OAuth callback server */
 const DEFAULT_CALLBACK_PORT = 19847;
-const AUTH_TIMEOUT_MS = 300000; // 5 minutes
+
+/** Authentication timeout duration (5 minutes) */
+const AUTH_TIMEOUT_MS = 300000;
 
 /**
  * HTML page that handles Puter popup auth flow
@@ -103,7 +134,7 @@ const getAuthHtml = (callbackUrl: string) => `
   <div class="card">
     <div class="logo">🟣</div>
     <h1>Connect to Puter</h1>
-    <p class="subtitle">Get FREE unlimited access to Claude, GPT-5, Gemini & 500+ AI models</p>
+    <p class="subtitle">Access Claude, GPT-5, Gemini and 500+ AI models through Puter.com</p>
     
     <div id="status" class="status loading">Initializing Puter SDK...</div>
     
@@ -115,7 +146,7 @@ const getAuthHtml = (callbackUrl: string) => `
       <div class="feature"><span class="feature-icon">✓</span> Claude Opus 4.5 & Sonnet 4.5</div>
       <div class="feature"><span class="feature-icon">✓</span> GPT-5.2 & o3-mini</div>
       <div class="feature"><span class="feature-icon">✓</span> Gemini 2.5 Pro (1M context)</div>
-      <div class="feature"><span class="feature-icon">✓</span> No rate limits, no API keys</div>
+      <div class="feature"><span class="feature-icon">✓</span> No API keys required</div>
     </div>
   </div>
 
@@ -194,14 +225,36 @@ const getAuthHtml = (callbackUrl: string) => `
 </html>
 `;
 
+/**
+ * Internal implementation of PuterAuthManager.
+ * 
+ * Not exported directly to avoid OpenCode plugin loader issues.
+ * OpenCode iterates through all exports and calls them as functions,
+ * which causes "cannot call class without new" errors.
+ * 
+ * Use {@link createPuterAuthManager} factory function instead.
+ */
 // Internal class - not exported to avoid OpenCode plugin loader issues
 // OpenCode iterates through all exports and calls them as functions
 class PuterAuthManagerInternal {
+  /** Directory where config files are stored */
   private configDir: string;
+  
+  /** Path to the accounts JSON file */
   private accountsFile: string;
+  
+  /** In-memory account storage (synced with disk) */
   private storage: PuterAccountsStorage | null = null;
+  
+  /** Logger instance for debugging */
   private logger: Logger;
 
+  /**
+   * Create a new PuterAuthManager instance.
+   * 
+   * @param configDir - Directory to store account data (e.g., ~/.config/opencode)
+   * @param config - Optional configuration overrides
+   */
   constructor(configDir: string, config: Partial<PuterConfig> = {}) {
     this.configDir = configDir;
     this.accountsFile = path.join(configDir, 'puter-accounts.json');
@@ -209,7 +262,12 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Initialize the auth manager and load existing accounts
+   * Initialize the auth manager and load existing accounts from disk.
+   * 
+   * Must be called before using other methods. Creates the config
+   * directory if it doesn't exist and loads any saved accounts.
+   * 
+   * @throws Error if unable to create config directory
    */
   public async init(): Promise<void> {
     this.logger.debug('Initializing auth manager');
@@ -231,7 +289,8 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Load accounts from disk
+   * Load accounts from the persisted JSON file.
+   * If file doesn't exist or is invalid, initializes with empty storage.
    */
   private async loadAccounts(): Promise<void> {
     try {
@@ -249,7 +308,8 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Save accounts to disk
+   * Persist current account storage to disk.
+   * Called automatically after any account modification.
    */
   private async saveAccounts(): Promise<void> {
     if (!this.storage) return;
@@ -259,7 +319,12 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Get the active account
+   * Get the currently active Puter account.
+   * 
+   * The active account is used for all API calls. Use {@link switchAccount}
+   * to change which account is active.
+   * 
+   * @returns The active account, or null if not authenticated
    */
   public getActiveAccount(): PuterAccount | null {
     if (!this.storage || this.storage.accounts.length === 0) {
@@ -269,24 +334,49 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Get all accounts
+   * Get all stored Puter accounts.
+   * 
+   * Useful for displaying account selection UI or implementing
+   * account rotation when rate limits are hit.
+   * 
+   * @returns Array of all accounts (may be empty)
    */
   public getAllAccounts(): PuterAccount[] {
     return this.storage?.accounts || [];
   }
 
   /**
-   * Check if we have any authenticated accounts
+   * Check if there is at least one authenticated account.
+   * 
+   * @returns true if at least one account is available
    */
   public isAuthenticated(): boolean {
     return this.getActiveAccount() !== null;
   }
 
   /**
-   * Start the OAuth flow in browser
+   * Start the OAuth flow by opening a browser for Puter authentication.
    * 
-   * This serves an HTML page that handles the Puter popup auth flow,
-   * then redirects to our local callback with the token.
+   * This method:
+   * 1. Starts a local HTTP server on port 19847
+   * 2. Opens the browser to serve the Puter SDK auth page
+   * 3. Waits for the user to complete sign-in via Puter popup
+   * 4. Receives the token via redirect to /callback
+   * 5. Stores the account and shuts down the server
+   * 
+   * The browser window can be closed after successful authentication.
+   * 
+   * @returns Authentication result with success status and account details
+   * 
+   * @example
+   * ```ts
+   * const result = await authManager.login();
+   * if (result.success) {
+   *   console.log('Authenticated as:', result.account?.username);
+   * } else {
+   *   console.error('Auth failed:', result.error);
+   * }
+   * ```
    */
   public async login(): Promise<PuterAuthResult> {
     return new Promise((resolve) => {
@@ -400,7 +490,22 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Add a new account (or update existing)
+   * Add a new account or update an existing one.
+   * 
+   * If an account with the same username exists, it will be updated
+   * with the new token. The added/updated account becomes the active account.
+   * 
+   * @param account - The account to add or update
+   * 
+   * @example
+   * ```ts
+   * await authManager.addAccount({
+   *   username: 'john_doe',
+   *   authToken: 'puter-token-xyz',
+   *   addedAt: Date.now(),
+   *   isTemporary: false,
+   * });
+   * ```
    */
   public async addAccount(account: PuterAccount): Promise<void> {
     if (!this.storage) {
@@ -428,7 +533,21 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Switch to a different account
+   * Switch to a different account by index.
+   * 
+   * The index corresponds to the account's position in {@link getAllAccounts}.
+   * The switched account becomes the active account for all API calls.
+   * 
+   * @param index - Zero-based index of the account to switch to
+   * @returns true if switch was successful, false if index is invalid
+   * 
+   * @example
+   * ```ts
+   * const accounts = authManager.getAllAccounts();
+   * if (accounts.length > 1) {
+   *   await authManager.switchAccount(1); // Switch to second account
+   * }
+   * ```
    */
   public async switchAccount(index: number): Promise<boolean> {
     if (!this.storage || index < 0 || index >= this.storage.accounts.length) {
@@ -444,7 +563,13 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Remove an account
+   * Remove an account by index.
+   * 
+   * If the removed account was active, the active index is adjusted
+   * to point to the previous account (or first if none remain).
+   * 
+   * @param index - Zero-based index of the account to remove
+   * @returns true if removal was successful, false if index is invalid
    */
   public async removeAccount(index: number): Promise<boolean> {
     if (!this.storage || index < 0 || index >= this.storage.accounts.length) {
@@ -465,7 +590,10 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Update the last used timestamp for the active account
+   * Update the lastUsed timestamp for the active account.
+   * 
+   * Called automatically by PuterClient after successful API calls.
+   * Useful for implementing least-recently-used account rotation.
    */
   public async touchActiveAccount(): Promise<void> {
     const account = this.getActiveAccount();
@@ -476,7 +604,10 @@ class PuterAuthManagerInternal {
   }
 
   /**
-   * Logout - remove all accounts
+   * Logout and remove all stored accounts.
+   * 
+   * This clears all account data from memory and disk.
+   * A new login will be required to use the plugin.
    */
   public async logout(): Promise<void> {
     this.logger.auth('Logging out', 'all accounts');
@@ -490,13 +621,36 @@ class PuterAuthManagerInternal {
 }
 
 /**
- * Type alias for the auth manager (for external use without exposing class)
+ * Type alias for the auth manager.
+ * 
+ * Used for external typing without exposing the internal class.
+ * Compatible with the {@link IAuthManager} interface for account rotation.
  */
 export type PuterAuthManager = PuterAuthManagerInternal;
 
 /**
- * Factory function to create a PuterAuthManager instance
- * This is the safe way to instantiate the auth manager
+ * Factory function to create a PuterAuthManager instance.
+ * 
+ * This is the recommended way to create an auth manager.
+ * Direct class instantiation is not exposed to avoid plugin loader issues.
+ * 
+ * @param configDir - Directory to store account data (e.g., ~/.config/opencode)
+ * @param config - Optional configuration overrides
+ * @returns A new PuterAuthManager instance (call .init() before use)
+ * 
+ * @example
+ * ```ts
+ * import { createPuterAuthManager } from 'opencode-puter-auth';
+ * 
+ * const authManager = createPuterAuthManager('~/.config/my-app');
+ * await authManager.init();
+ * 
+ * if (!authManager.isAuthenticated()) {
+ *   await authManager.login();
+ * }
+ * 
+ * const token = authManager.getActiveAccount()?.authToken;
+ * ```
  */
 export function createPuterAuthManager(configDir: string, config: Partial<PuterConfig> = {}): PuterAuthManager {
   return new PuterAuthManagerInternal(configDir, config);
