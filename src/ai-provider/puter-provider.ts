@@ -18,6 +18,11 @@ import type { PuterChatSettings, PuterProviderConfig, PuterChatConfig } from './
  */
 export interface PuterProvider extends ProviderV2 {
   /**
+   * Provider specification version.
+   */
+  specificationVersion: 'v2';
+
+  /**
    * Create a Puter chat language model.
    * @param modelId - The model ID (e.g., 'claude-opus-4-5', 'gpt-4o')
    * @param settings - Optional model settings

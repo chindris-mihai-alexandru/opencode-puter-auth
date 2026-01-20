@@ -3,9 +3,27 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createPuter, puter, PuterChatLanguageModel } from '../src/ai-provider/index.js';
+import { createPuter, puter } from '../src/ai-provider/index.js';
 import puterDefault from '../src/ai-provider/index.js';
+import type { PuterChatLanguageModel } from '../src/ai-provider/index.js';
 import type { LanguageModelV3CallOptions, LanguageModelV3Message } from '@ai-sdk/provider';
+
+/**
+ * Helper to check if an object is a PuterChatLanguageModel via duck typing.
+ * We can't use instanceof because PuterChatLanguageModel is exported as type-only
+ * to prevent OpenCode's plugin loader from iterating over it.
+ */
+function isPuterChatLanguageModel(obj: unknown): obj is PuterChatLanguageModel {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    'modelId' in obj &&
+    'provider' in obj &&
+    'specificationVersion' in obj &&
+    typeof (obj as any).doGenerate === 'function' &&
+    typeof (obj as any).doStream === 'function'
+  );
+}
 
 // Mock fetch
 const mockFetch = vi.fn();
@@ -34,7 +52,7 @@ describe('Puter AI SDK Provider', () => {
 
     it('should create a model when languageModel is called', () => {
       const model = puterDefault.languageModel('claude-opus-4-5');
-      expect(model).toBeInstanceOf(PuterChatLanguageModel);
+      expect(isPuterChatLanguageModel(model)).toBe(true);
       expect(model.modelId).toBe('claude-opus-4-5');
     });
 
@@ -66,7 +84,7 @@ describe('Puter AI SDK Provider', () => {
 
       const model = provider('claude-opus-4-5');
 
-      expect(model).toBeInstanceOf(PuterChatLanguageModel);
+      expect(isPuterChatLanguageModel(model)).toBe(true);
       expect(model.modelId).toBe('claude-opus-4-5');
       expect(model.provider).toBe('puter');
       expect(model.specificationVersion).toBe('v2');
@@ -79,7 +97,7 @@ describe('Puter AI SDK Provider', () => {
 
       const model = provider.languageModel('gpt-4o');
 
-      expect(model).toBeInstanceOf(PuterChatLanguageModel);
+      expect(isPuterChatLanguageModel(model)).toBe(true);
       expect(model.modelId).toBe('gpt-4o');
     });
 
@@ -90,7 +108,7 @@ describe('Puter AI SDK Provider', () => {
 
       const model = provider.chat('gemini-2.5-pro');
 
-      expect(model).toBeInstanceOf(PuterChatLanguageModel);
+      expect(isPuterChatLanguageModel(model)).toBe(true);
       expect(model.modelId).toBe('gemini-2.5-pro');
     });
 
@@ -101,7 +119,7 @@ describe('Puter AI SDK Provider', () => {
       });
 
       const model = provider('claude-opus-4-5');
-      expect(model).toBeInstanceOf(PuterChatLanguageModel);
+      expect(isPuterChatLanguageModel(model)).toBe(true);
     });
 
     it('should throw when called with new keyword', () => {

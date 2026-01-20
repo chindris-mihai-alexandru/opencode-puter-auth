@@ -30,8 +30,9 @@ export { createPuter, puter } from './puter-provider.js';
 export { puter as default } from './puter-provider.js';
 export type { PuterProvider } from './puter-provider.js';
 
-// Model exports
-export { PuterChatLanguageModel } from './puter-chat-language-model.js';
+// Model exports - type-only to prevent OpenCode's plugin loader from
+// iterating over the class and calling .config() on it (causes TypeError)
+export type { PuterChatLanguageModel } from './puter-chat-language-model.js';
 
 // Settings exports - only types, no classes
 export type {
