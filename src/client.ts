@@ -12,6 +12,7 @@ import type {
   PuterChatStreamChunk,
   PuterModelInfo,
   PuterConfig,
+  PuterMonthlyUsage,
 } from './types.js';
 import { withRetry, type RetryOptions } from './retry.js';
 import { createLoggerFromConfig, type Logger } from './logger.js';
@@ -471,6 +472,48 @@ export class PuterClient {
     } catch (error) {
       this.logger.debug('Connection test failed', error instanceof Error ? error.message : 'Unknown error');
       return false;
+    }
+  }
+
+  /**
+   * Get the user's monthly usage and remaining credits
+   * 
+   * @returns Monthly usage information including allowance and remaining credits
+   * 
+   * @example
+   * ```ts
+   * const usage = await client.getMonthlyUsage();
+   * console.log(`Remaining: $${usage.allowanceInfo.remaining / 100000000}`);
+   * ```
+   */
+  public async getMonthlyUsage(): Promise<PuterMonthlyUsage> {
+    const startTime = Date.now();
+    this.logger.request('GET', '/auth/get-monthly-usage', {});
+    
+    try {
+      const response = await fetch(`${this.apiUrl}/auth/get-monthly-usage`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get monthly usage (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      const duration = Date.now() - startTime;
+      this.logger.response(200, 'OK', duration);
+      
+      return data as PuterMonthlyUsage;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      const statusMatch = error instanceof Error && error.message.match(/\((\d+)\)/);
+      const status = statusMatch ? parseInt(statusMatch[1], 10) : 500;
+      this.logger.response(status, error instanceof Error ? error.message : 'Unknown error', duration);
+      throw error;
     }
   }
 }

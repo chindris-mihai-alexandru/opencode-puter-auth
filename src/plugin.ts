@@ -650,6 +650,126 @@ export const PuterAuthPlugin: Plugin = async (_input: PluginInput): Promise<Hook
           }
         },
       }),
+
+      'puter-usage': tool({
+        description: 'Check Puter.com monthly credit usage for all accounts. Shows remaining credits and helps identify exhausted accounts.',
+        args: {
+          all: tool.schema.boolean().optional().describe('Check usage for all accounts, not just the active one'),
+        },
+        async execute(args) {
+          if (!authManager) {
+            return 'Puter plugin not initialized';
+          }
+
+          const accounts = args.all ? authManager.getAllAccounts() : [];
+          const activeAccount = authManager.getActiveAccount();
+          
+          if (!activeAccount && accounts.length === 0) {
+            return 'No Puter accounts configured. Run: opencode auth login';
+          }
+
+          // Helper to format microcents as dollars
+          const formatDollars = (microcents: number): string => {
+            const dollars = microcents / 100_000_000;
+            return `$${dollars.toFixed(2)}`;
+          };
+
+          // Helper to get percentage used
+          const getPercentUsed = (remaining: number, total: number): number => {
+            if (total === 0) return 100;
+            return Math.round(((total - remaining) / total) * 100);
+          };
+
+          // Helper to get status indicator
+          const getStatus = (remaining: number, total: number): string => {
+            const percentRemaining = (remaining / total) * 100;
+            if (percentRemaining === 0) return '❌ Exhausted';
+            if (percentRemaining < 10) return '🔴 Critical';
+            if (percentRemaining < 25) return '🟠 Low';
+            if (percentRemaining < 50) return '🟡 Moderate';
+            return '🟢 Good';
+          };
+
+          let output = '# Puter.com Monthly Usage\n\n';
+
+          // Check active account first
+          if (activeAccount) {
+            const client = new PuterClient(activeAccount.authToken, pluginConfig);
+            try {
+              const usage = await client.getMonthlyUsage();
+              const { remaining, monthUsageAllowance } = usage.allowanceInfo;
+              const percentUsed = getPercentUsed(remaining, monthUsageAllowance);
+              const status = getStatus(remaining, monthUsageAllowance);
+
+              output += `## Current Account: ${activeAccount.username}\n\n`;
+              output += `| Metric | Value |\n`;
+              output += `|--------|-------|\n`;
+              output += `| Remaining | ${formatDollars(remaining)} of ${formatDollars(monthUsageAllowance)} |\n`;
+              output += `| Used | ${percentUsed}% |\n`;
+              output += `| Status | ${status} |\n`;
+
+              // Show API breakdown if available
+              if (usage.usage && Object.keys(usage.usage).length > 0) {
+                output += `\n### API Usage Breakdown\n\n`;
+                output += `| API | Calls | Cost |\n`;
+                output += `|-----|-------|------|\n`;
+                for (const [api, data] of Object.entries(usage.usage)) {
+                  output += `| ${api} | ${data.count.toLocaleString()} | ${formatDollars(data.cost)} |\n`;
+                }
+              }
+
+              if (remaining === 0) {
+                output += `\n**Warning:** This account has exhausted its monthly credits. `;
+                output += `Consider creating a new Puter account or waiting for the monthly reset.\n`;
+              }
+            } catch (error) {
+              const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+              output += `## Current Account: ${activeAccount.username}\n\n`;
+              if (errorMsg.includes('403')) {
+                output += `❌ **Account exhausted or rate limited**\n\n`;
+                output += `This account is returning 403 Forbidden, which typically means:\n`;
+                output += `- Monthly credits are exhausted\n`;
+                output += `- Account is rate limited\n\n`;
+              } else {
+                output += `❌ **Error checking usage:** ${errorMsg}\n\n`;
+              }
+            }
+          }
+
+          // Check other accounts if requested
+          if (args.all && accounts.length > 0) {
+            output += `\n---\n\n## All Accounts Summary\n\n`;
+            output += `| Account | Remaining | Status |\n`;
+            output += `|---------|-----------|--------|\n`;
+
+            for (const account of accounts) {
+              const isActive = account === activeAccount;
+              const marker = isActive ? ' (active)' : '';
+              
+              const client = new PuterClient(account.authToken, pluginConfig);
+              try {
+                const usage = await client.getMonthlyUsage();
+                const { remaining, monthUsageAllowance } = usage.allowanceInfo;
+                const status = getStatus(remaining, monthUsageAllowance);
+                output += `| ${account.username}${marker} | ${formatDollars(remaining)} | ${status} |\n`;
+              } catch (error) {
+                const errorMsg = error instanceof Error ? error.message : 'Unknown';
+                if (errorMsg.includes('403')) {
+                  output += `| ${account.username}${marker} | $0.00 | ❌ Exhausted/Blocked |\n`;
+                } else {
+                  output += `| ${account.username}${marker} | - | ❌ Error |\n`;
+                }
+              }
+            }
+          }
+
+          output += `\n---\n`;
+          output += `*Credits are measured in microcents ($1.00 = 100,000,000 microcents)*\n`;
+          output += `*Use \`puter-usage --all\` to check all accounts*\n`;
+
+          return output;
+        },
+      }),
     },
 
     // ========================================

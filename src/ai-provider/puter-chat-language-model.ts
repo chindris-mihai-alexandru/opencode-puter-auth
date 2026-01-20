@@ -27,7 +27,14 @@ import type { PuterChatSettings, PuterChatConfig } from './puter-chat-settings.j
 import { 
   getGlobalFallbackManager, 
   type FallbackManager,
+  classifyError,
 } from '../fallback.js';
+import { 
+  getGlobalAccountRotationManager, 
+  type AccountRotationManager,
+  type IAuthManager,
+  AllAccountsOnCooldownError,
+} from '../account-rotation.js';
 import { createLogger, type Logger } from '../logger.js';
 
 // Type definitions for Puter SDK responses
@@ -148,6 +155,7 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
   private readonly _modelConfig: PuterChatConfig;
   private puterInstance: PuterSDK | null = null;
   private readonly fallbackManager: FallbackManager;
+  private accountRotationManager: AccountRotationManager | null = null;
   private readonly logger: Logger;
 
   constructor(
@@ -165,6 +173,145 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
     
     // Create logger (uses console by default, can be configured)
     this.logger = createLogger({ debug: false }); // Will be quiet unless debug enabled
+    
+    // AccountRotationManager will be initialized lazily when needed
+    // (requires auth manager which may not be available at construction time)
+  }
+
+  /**
+   * Initialize the AccountRotationManager lazily.
+   * This is called when we need to handle account rotation.
+   */
+  private async getAccountRotationManager(): Promise<AccountRotationManager | null> {
+    if (this.accountRotationManager) {
+      return this.accountRotationManager;
+    }
+
+    try {
+      // Load auth manager from config directory
+      const os = await import('os');
+      const path = await import('path');
+      const configDir = path.join(os.homedir(), '.config', 'opencode');
+      
+      // Dynamically import auth module to avoid circular dependencies
+      const { createPuterAuthManager } = await import('../auth.js');
+      const authManager = createPuterAuthManager(configDir);
+      await authManager.init();
+      
+      // Only create rotation manager if we have multiple accounts
+      if (authManager.getAllAccounts().length > 1) {
+        this.accountRotationManager = getGlobalAccountRotationManager(
+          authManager as IAuthManager,
+          { enabled: true },
+          this.logger
+        );
+        this.logger.info(`Account rotation enabled with ${authManager.getAllAccounts().length} accounts`);
+      }
+      
+      return this.accountRotationManager;
+    } catch (error) {
+      // If we can't initialize, account rotation just won't be available
+      this.logger.debug(`Account rotation not available: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return null;
+    }
+  }
+
+  /**
+   * Reset the Puter SDK instance to force re-initialization with new credentials.
+   * This is called after account rotation to pick up the new auth token.
+   */
+  private resetPuterInstance(): void {
+    this.puterInstance = null;
+  }
+
+  /**
+   * Check if an error indicates account-level exhaustion (403 Forbidden).
+   */
+  private isAccountExhaustedError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    const msg = error.message.toLowerCase();
+    const errorType = classifyError(error);
+    return errorType === 'forbidden' || msg.includes('403') || msg.includes('credits exhausted');
+  }
+
+  /**
+   * Execute an operation with account rotation support.
+   * 
+   * When an account returns 403 (credits exhausted), this will:
+   * 1. Add the current account to cooldown
+   * 2. Rotate to the next available account
+   * 3. Reset the Puter SDK to use new credentials
+   * 4. Retry the operation
+   * 
+   * If all accounts are exhausted, lets the error propagate (fallback manager will handle it).
+   */
+  private async executeWithAccountRotation<T>(
+    operation: () => Promise<T>,
+    maxRotations: number = 3
+  ): Promise<{ result: T; wasRotated: boolean; accountUsed?: string }> {
+    let rotations = 0;
+    let wasRotated = false;
+    let lastError: Error | null = null;
+
+    while (rotations <= maxRotations) {
+      try {
+        const result = await operation();
+        
+        // Success! If we rotated, mark the new account as working
+        const rotationManager = await this.getAccountRotationManager();
+        if (rotationManager && wasRotated) {
+          const summary = rotationManager.getSummary();
+          if (summary.currentAccount) {
+            rotationManager.removeFromCooldown(summary.currentAccount);
+          }
+        }
+        
+        return { 
+          result, 
+          wasRotated,
+          accountUsed: (await this.getAccountRotationManager())?.getSummary().currentAccount ?? undefined
+        };
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        // Check if this is an account exhaustion error (403)
+        if (!this.isAccountExhaustedError(error)) {
+          // Not an account error, let it propagate
+          throw error;
+        }
+
+        // Try to rotate to another account
+        const rotationManager = await this.getAccountRotationManager();
+        if (!rotationManager) {
+          // No rotation manager (single account), let error propagate
+          throw error;
+        }
+
+        try {
+          const rotationResult = await rotationManager.handleRateLimitError(lastError);
+          if (!rotationResult) {
+            // All accounts on cooldown
+            this.logger.warn('All accounts exhausted, falling back to free models');
+            throw new AllAccountsOnCooldownError(rotationManager.getAccountStatuses());
+          }
+
+          // Successfully rotated to a new account
+          this.logger.info(`Account ${rotationResult.previousUsername} exhausted, rotated to ${rotationResult.account.username}`);
+          this.resetPuterInstance(); // Force re-init with new credentials
+          wasRotated = true;
+          rotations++;
+        } catch (rotationError) {
+          if (rotationError instanceof AllAccountsOnCooldownError) {
+            // All accounts exhausted, let fallback manager handle it
+            throw lastError; // Throw the original 403 error
+          }
+          throw rotationError;
+        }
+      }
+    }
+
+    // Max rotations reached
+    throw lastError || new Error('Max account rotations reached');
   }
 
   /**
@@ -393,8 +540,12 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
   /**
    * Non-streaming generation using Puter SDK.
    * 
-   * Automatically falls back to alternative models when rate limits are hit,
-   * unless `disableFallback` is set in settings.
+   * Execution order for rate limit handling:
+   * 1. Try with current account
+   * 2. If account exhausted (403), rotate to next account and retry
+   * 3. If all accounts exhausted, fall back to free models
+   * 
+   * Set `disableFallback` in settings to skip model fallback.
    */
   async doGenerate(options: LanguageModelV2CallOptions): Promise<{
     content: Array<LanguageModelV2Content>;
@@ -404,17 +555,33 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
     request?: { body?: unknown };
     response?: { body?: unknown };
   }> {
-    const puter = await this.initPuterSDK();
     const messages = this.convertPromptToMessages(options.prompt);
     const warnings: LanguageModelV2CallWarning[] = [];
     
     // Check if fallback is disabled for this request
     const useFallback = !this.settings.disableFallback;
     
-    // Define the operation that will be executed (possibly with fallback)
-    const executeChat = async (model: string): Promise<PuterChatResponse> => {
+    // Define the core chat operation (for a specific model)
+    const executeChatForModel = async (model: string): Promise<PuterChatResponse> => {
+      const puter = await this.initPuterSDK();
       const sdkOptions = this.buildSDKOptions(options, false, model);
       return await puter.ai.chat(messages, sdkOptions) as PuterChatResponse;
+    };
+    
+    // Wrap with account rotation: try other accounts before falling back to free models
+    const executeChatWithRotation = async (model: string): Promise<PuterChatResponse> => {
+      const { result, wasRotated, accountUsed } = await this.executeWithAccountRotation(
+        () => executeChatForModel(model)
+      );
+      
+      if (wasRotated && accountUsed) {
+        warnings.push({
+          type: 'other',
+          message: `Rotated to account: ${accountUsed}`,
+        });
+      }
+      
+      return result;
     };
     
     let response: PuterChatResponse;
@@ -422,10 +589,10 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
     let wasFallback = false;
     
     if (useFallback) {
-      // Execute with fallback support
+      // Execute with account rotation + model fallback support
       const fallbackResult = await this.fallbackManager.executeWithFallback(
         this.modelId,
-        executeChat,
+        executeChatWithRotation,
         this.logger
       );
       response = fallbackResult.result;
@@ -440,9 +607,18 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
         });
       }
     } else {
-      // Execute without fallback
-      const sdkOptions = this.buildSDKOptions(options, false);
-      response = await puter.ai.chat(messages, sdkOptions) as PuterChatResponse;
+      // Execute without fallback (but still with account rotation)
+      const { result, wasRotated, accountUsed } = await this.executeWithAccountRotation(
+        () => executeChatForModel(this.modelId)
+      );
+      response = result;
+      
+      if (wasRotated && accountUsed) {
+        warnings.push({
+          type: 'other',
+          message: `Rotated to account: ${accountUsed}`,
+        });
+      }
     }
 
     const content: LanguageModelV2Content[] = [];
@@ -497,14 +673,17 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
   /**
    * Streaming generation using Puter SDK.
    * 
-   * Automatically falls back to alternative models when rate limits are hit,
-   * unless `disableFallback` is set in settings.
+   * Execution order for rate limit handling:
+   * 1. Try with current account
+   * 2. If account exhausted (403), rotate to next account and retry
+   * 3. If all accounts exhausted, fall back to free models
+   * 
+   * Set `disableFallback` in settings to skip model fallback.
    */
   async doStream(options: LanguageModelV2CallOptions): Promise<{
     stream: ReadableStream<LanguageModelV2StreamPart>;
     request?: { body?: unknown };
   }> {
-    const puter = await this.initPuterSDK();
     const messages = this.convertPromptToMessages(options.prompt);
     const warnings: LanguageModelV2CallWarning[] = [];
     const generateId = this._modelConfig.generateId;
@@ -512,26 +691,45 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
     // Check if fallback is disabled for this request
     const useFallback = !this.settings.disableFallback;
     
-    // Define the operation that initiates the stream
-    const initiateStream = async (model: string): Promise<AsyncIterable<PuterStreamChunk>> => {
+    // Define the core stream operation (for a specific model)
+    const initiateStreamForModel = async (model: string): Promise<AsyncIterable<PuterStreamChunk>> => {
+      const puter = await this.initPuterSDK();
       const sdkOptions = this.buildSDKOptions(options, true, model);
       return await puter.ai.chat(messages, sdkOptions) as AsyncIterable<PuterStreamChunk>;
     };
     
+    // Wrap with account rotation: try other accounts before falling back to free models
+    const initiateStreamWithRotation = async (model: string): Promise<AsyncIterable<PuterStreamChunk>> => {
+      const { result, wasRotated, accountUsed } = await this.executeWithAccountRotation(
+        () => initiateStreamForModel(model)
+      );
+      
+      if (wasRotated && accountUsed) {
+        warnings.push({
+          type: 'other',
+          message: `Rotated to account: ${accountUsed}`,
+        });
+      }
+      
+      return result;
+    };
+    
     let streamResponse: AsyncIterable<PuterStreamChunk>;
     let actualModelUsed = this.modelId;
+    let wasFallback = false;
     
     if (useFallback) {
-      // Execute stream initiation with fallback support
+      // Execute with account rotation + model fallback support
       const fallbackResult = await this.fallbackManager.executeWithFallback(
         this.modelId,
-        initiateStream,
+        initiateStreamWithRotation,
         this.logger
       );
       streamResponse = fallbackResult.result;
       actualModelUsed = fallbackResult.usedModel;
+      wasFallback = fallbackResult.wasFallback;
       
-      if (fallbackResult.wasFallback) {
+      if (wasFallback) {
         // Add a warning that fallback was used
         warnings.push({
           type: 'other',
@@ -539,9 +737,18 @@ export class PuterChatLanguageModel implements LanguageModelV2 {
         });
       }
     } else {
-      // Execute without fallback
-      const sdkOptions = this.buildSDKOptions(options, true);
-      streamResponse = await puter.ai.chat(messages, sdkOptions) as AsyncIterable<PuterStreamChunk>;
+      // Execute without fallback (but still with account rotation)
+      const { result, wasRotated, accountUsed } = await this.executeWithAccountRotation(
+        () => initiateStreamForModel(this.modelId)
+      );
+      streamResponse = result;
+      
+      if (wasRotated && accountUsed) {
+        warnings.push({
+          type: 'other',
+          message: `Rotated to account: ${accountUsed}`,
+        });
+      }
     }
 
     // Create a transform stream to convert Puter chunks to AI SDK V2 format

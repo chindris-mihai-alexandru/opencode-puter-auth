@@ -187,3 +187,30 @@ export type PuterModelId =
   | typeof PUTER_GPT_MODELS[number]
   | typeof PUTER_GEMINI_MODELS[number]
   | string;
+
+// Monthly Usage Information (from puter.auth.getMonthlyUsage())
+export interface PuterMonthlyUsage {
+  /** Information about the user's resource allowance and consumption */
+  allowanceInfo: {
+    /** Total resource allowance for the month (in microcents: $0.50 = 50,000,000) */
+    monthUsageAllowance: number;
+    /** The remaining allowance that can be used (in microcents) */
+    remaining: number;
+  };
+  /** Total usage by application. Each key is an application id. */
+  appTotals?: Record<string, {
+    /** Number of Puter API calls per application */
+    count: number;
+    /** Total resources consumed per application (in microcents) */
+    total: number;
+  }>;
+  /** Usage information per API. Each key is an API name. */
+  usage?: Record<string, {
+    /** Total resource consumed by this API (in microcents) */
+    cost: number;
+    /** Number of times the API is called */
+    count: number;
+    /** Units of measurement (e.g., tokens for AI calls, bytes for FS operations) */
+    units: number;
+  }>;
+}
