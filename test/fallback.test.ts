@@ -8,11 +8,15 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   FallbackManager,
   isRateLimitError,
+  extractHttpStatus,
+  classifyError,
+  getErrorTypeDescription,
   FallbackExhaustedError,
   DEFAULT_FALLBACK_MODELS,
   DEFAULT_COOLDOWN_MS,
   getGlobalFallbackManager,
   resetGlobalFallbackManager,
+  type FallbackErrorType,
 } from '../src/fallback.js';
 import { nullLogger } from '../src/logger.js';
 
@@ -47,6 +51,133 @@ describe('isRateLimitError', () => {
     expect(isRateLimitError(null)).toBe(false);
     expect(isRateLimitError(undefined)).toBe(false);
     expect(isRateLimitError({ message: 'rate limit' })).toBe(false);
+  });
+});
+
+describe('extractHttpStatus', () => {
+  it('should extract status from parentheses format (429)', () => {
+    expect(extractHttpStatus(new Error('Puter API error (429): Too many requests'))).toBe(429);
+    expect(extractHttpStatus(new Error('Error (500) occurred'))).toBe(500);
+    expect(extractHttpStatus(new Error('Something (403) forbidden'))).toBe(403);
+  });
+
+  it('should extract status from "status" format', () => {
+    expect(extractHttpStatus(new Error('Status 429: Rate limited'))).toBe(429);
+    expect(extractHttpStatus(new Error('status: 503 Service Unavailable'))).toBe(503);
+    expect(extractHttpStatus(new Error('HTTP status 401'))).toBe(401);
+  });
+
+  it('should extract status from "HTTP" format', () => {
+    expect(extractHttpStatus(new Error('HTTP 502 Bad Gateway'))).toBe(502);
+    expect(extractHttpStatus(new Error('HTTP: 504 timeout'))).toBe(504);
+  });
+
+  it('should extract status from "code" format', () => {
+    expect(extractHttpStatus(new Error('code: 429'))).toBe(429);
+    expect(extractHttpStatus(new Error('Error code 500'))).toBe(500);
+  });
+
+  it('should extract status from "NNN error" format', () => {
+    expect(extractHttpStatus(new Error('429 error from server'))).toBe(429);
+    expect(extractHttpStatus(new Error('503 Error: Service down'))).toBe(503);
+  });
+
+  it('should return undefined for non-HTTP status errors', () => {
+    expect(extractHttpStatus(new Error('Something went wrong'))).toBeUndefined();
+    expect(extractHttpStatus(new Error('Invalid model'))).toBeUndefined();
+    expect(extractHttpStatus(new Error(''))).toBeUndefined();
+  });
+
+  it('should return undefined for invalid status codes', () => {
+    // Status codes must be 100-599
+    expect(extractHttpStatus(new Error('Error (999)'))).toBeUndefined();
+    expect(extractHttpStatus(new Error('Error (50)'))).toBeUndefined();
+  });
+
+  it('should handle non-Error values', () => {
+    expect(extractHttpStatus('error (429)')).toBeUndefined();
+    expect(extractHttpStatus(null)).toBeUndefined();
+    expect(extractHttpStatus(undefined)).toBeUndefined();
+  });
+});
+
+describe('classifyError', () => {
+  it('should classify rate limit errors (429)', () => {
+    expect(classifyError(new Error('Error (429): Too many requests'))).toBe('rate_limit');
+    expect(classifyError(new Error('Rate limit exceeded'))).toBe('rate_limit');
+    expect(classifyError(new Error('quota exceeded'))).toBe('rate_limit');
+  });
+
+  it('should classify forbidden errors (403)', () => {
+    expect(classifyError(new Error('Error (403): Forbidden'))).toBe('forbidden');
+  });
+
+  it('should classify auth errors (401)', () => {
+    expect(classifyError(new Error('Error (401): Unauthorized'))).toBe('auth_error');
+    expect(classifyError(new Error('Authentication failed'))).toBe('auth_error');
+    expect(classifyError(new Error('Unauthorized access'))).toBe('auth_error');
+    expect(classifyError(new Error('Invalid key provided'))).toBe('auth_error');
+    expect(classifyError(new Error('Invalid token provided'))).toBe('auth_error');
+  });
+
+  it('should classify not found errors (404)', () => {
+    expect(classifyError(new Error('Error (404): Not found'))).toBe('not_found');
+    expect(classifyError(new Error('Model does not exist'))).toBe('not_found');
+    expect(classifyError(new Error('Unknown model requested'))).toBe('not_found');
+  });
+
+  it('should classify server errors (5xx)', () => {
+    expect(classifyError(new Error('Error (500): Internal server error'))).toBe('server_error');
+    expect(classifyError(new Error('Error (502): Bad gateway'))).toBe('server_error');
+    expect(classifyError(new Error('Error (503): Service unavailable'))).toBe('server_error');
+    expect(classifyError(new Error('Error (504): Gateway timeout'))).toBe('server_error');
+    expect(classifyError(new Error('Service unavailable'))).toBe('server_error');
+  });
+
+  it('should classify timeout errors', () => {
+    expect(classifyError(new Error('Request timeout'))).toBe('timeout');
+    expect(classifyError(new Error('Connection timed out'))).toBe('timeout');
+  });
+
+  it('should classify context length errors', () => {
+    expect(classifyError(new Error('Context length exceeded'))).toBe('context_length');
+    expect(classifyError(new Error('Context too long for model'))).toBe('context_length');
+    expect(classifyError(new Error('Maximum context exceeded'))).toBe('context_length');
+  });
+
+  it('should return unknown for unrecognized errors', () => {
+    expect(classifyError(new Error('Something random happened'))).toBe('unknown');
+    expect(classifyError(new Error(''))).toBe('unknown');
+  });
+
+  it('should handle non-Error values', () => {
+    expect(classifyError('rate limit')).toBe('unknown');
+    expect(classifyError(null)).toBe('unknown');
+    expect(classifyError(undefined)).toBe('unknown');
+  });
+});
+
+describe('getErrorTypeDescription', () => {
+  it('should return human-readable descriptions for all error types', () => {
+    const types: FallbackErrorType[] = [
+      'rate_limit', 'forbidden', 'server_error', 'timeout',
+      'auth_error', 'not_found', 'context_length', 'unknown'
+    ];
+    
+    const descriptions: Record<FallbackErrorType, string> = {
+      'rate_limit': 'Rate Limited',
+      'forbidden': 'Access Denied',
+      'server_error': 'Server Error',
+      'timeout': 'Timeout',
+      'auth_error': 'Auth Error',
+      'not_found': 'Not Found',
+      'context_length': 'Context Too Long',
+      'unknown': 'Error',
+    };
+    
+    for (const type of types) {
+      expect(getErrorTypeDescription(type)).toBe(descriptions[type]);
+    }
   });
 });
 
@@ -354,6 +485,118 @@ describe('FallbackManager', () => {
       
       // Should only have called operation once
       expect(operation).toHaveBeenCalledTimes(1);
+    });
+
+    it('should include errorType and httpStatus in FallbackAttempt', async () => {
+      const operation = vi.fn()
+        .mockRejectedValueOnce(new Error('Error (429): Rate limit exceeded'))
+        .mockResolvedValue('success');
+      
+      const result = await manager.executeWithFallback(
+        'primary-model',
+        operation,
+        nullLogger
+      );
+      
+      const failedAttempt = result.attempts[0];
+      expect(failedAttempt.success).toBe(false);
+      expect(failedAttempt.errorType).toBe('rate_limit');
+      expect(failedAttempt.httpStatus).toBe(429);
+      expect(failedAttempt.isRateLimit).toBe(true);
+      expect(failedAttempt.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should classify different error types correctly in attempts', async () => {
+      const operation = vi.fn()
+        .mockRejectedValueOnce(new Error('Error (403): Forbidden'))
+        .mockRejectedValueOnce(new Error('Error (500): Server error'))
+        .mockResolvedValue('success');
+      
+      manager = new FallbackManager({
+        fallbackModels: ['fallback-1', 'fallback-2'],
+        cooldownMs: 1000,
+      });
+      
+      const result = await manager.executeWithFallback(
+        'primary-model',
+        operation,
+        nullLogger
+      );
+      
+      expect(result.attempts[0].errorType).toBe('forbidden');
+      expect(result.attempts[0].httpStatus).toBe(403);
+      expect(result.attempts[1].errorType).toBe('server_error');
+      expect(result.attempts[1].httpStatus).toBe(500);
+    });
+  });
+
+  describe('verbose and quiet modes', () => {
+    it('should accept verbose option in constructor', () => {
+      const verboseManager = new FallbackManager({ verbose: true });
+      expect(verboseManager.getConfig().verbose).toBe(true);
+    });
+
+    it('should accept quiet option in constructor', () => {
+      const quietManager = new FallbackManager({ quiet: true });
+      expect(quietManager.getConfig().quiet).toBe(true);
+    });
+
+    it('should default verbose and quiet to false', () => {
+      const defaultManager = new FallbackManager();
+      expect(defaultManager.getConfig().verbose).toBe(false);
+      expect(defaultManager.getConfig().quiet).toBe(false);
+    });
+
+    it('should configure verbose mode', () => {
+      manager.configure({ verbose: true });
+      expect(manager.getConfig().verbose).toBe(true);
+    });
+
+    it('should configure quiet mode', () => {
+      manager.configure({ quiet: true });
+      expect(manager.getConfig().quiet).toBe(true);
+    });
+
+    it('should execute successfully in verbose mode', async () => {
+      manager = new FallbackManager({
+        fallbackModels: ['fallback-model-1'],
+        cooldownMs: 1000,
+        verbose: true,
+      });
+      
+      const operation = vi.fn()
+        .mockRejectedValueOnce(new Error('Rate limit exceeded (429)'))
+        .mockResolvedValue('success');
+      
+      const result = await manager.executeWithFallback(
+        'primary-model',
+        operation,
+        nullLogger
+      );
+      
+      expect(result.wasFallback).toBe(true);
+      expect(result.result).toBe('success');
+    });
+
+    it('should execute successfully in quiet mode', async () => {
+      manager = new FallbackManager({
+        fallbackModels: ['fallback-model-1'],
+        cooldownMs: 1000,
+        quiet: true,
+      });
+      
+      const operation = vi.fn()
+        .mockRejectedValueOnce(new Error('Rate limit exceeded (429)'))
+        .mockResolvedValue('success');
+      
+      const result = await manager.executeWithFallback(
+        'primary-model',
+        operation,
+        nullLogger
+      );
+      
+      expect(result.wasFallback).toBe(true);
+      expect(result.result).toBe('success');
     });
   });
 

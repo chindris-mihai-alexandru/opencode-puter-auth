@@ -53,6 +53,19 @@ export const DEFAULT_FALLBACK_MODELS = [
 export const DEFAULT_COOLDOWN_MS = 60000;
 
 /**
+ * Error type classification for better debugging
+ */
+export type FallbackErrorType = 
+  | 'rate_limit'      // 429 - Too Many Requests
+  | 'forbidden'       // 403 - Often means model/account restricted
+  | 'server_error'    // 500, 502, 503 - Provider issues
+  | 'timeout'         // Request timed out
+  | 'auth_error'      // 401 - Authentication issue
+  | 'not_found'       // 404 - Model not found
+  | 'context_length'  // Context too long for model
+  | 'unknown';        // Other errors
+
+/**
  * Configuration options for FallbackManager
  */
 export interface FallbackOptions {
@@ -62,6 +75,10 @@ export interface FallbackOptions {
   cooldownMs?: number;
   /** Whether fallback is enabled */
   enabled?: boolean;
+  /** Verbose logging - show detailed info about each attempt */
+  verbose?: boolean;
+  /** Quiet mode - only show errors, suppress info/warnings */
+  quiet?: boolean;
 }
 
 /**
@@ -74,7 +91,11 @@ export interface FallbackAttempt {
   success: boolean;
   /** Error message if failed */
   error?: string;
-  /** Whether the error was a rate limit */
+  /** Classified error type */
+  errorType?: FallbackErrorType;
+  /** HTTP status code if available */
+  httpStatus?: number;
+  /** Whether the error was a rate limit (deprecated, use errorType) */
   isRateLimit?: boolean;
   /** Duration of the attempt in ms */
   durationMs?: number;
@@ -150,6 +171,119 @@ export function isRateLimitError(error: unknown): boolean {
 }
 
 /**
+ * Extract HTTP status code from error message
+ * 
+ * @param error - The error to extract status from
+ * @returns HTTP status code or undefined
+ */
+export function extractHttpStatus(error: unknown): number | undefined {
+  if (!(error instanceof Error)) return undefined;
+  
+  const message = error.message;
+  
+  // Match patterns like "(429)", "status 429", "HTTP 429", "code: 429"
+  const patterns = [
+    /\((\d{3})\)/,           // (429)
+    /status[:\s]+(\d{3})/i,  // status 429, status: 429
+    /HTTP[:\s]+(\d{3})/i,    // HTTP 429, HTTP: 429
+    /code[:\s]+(\d{3})/i,    // code 429, code: 429
+    /(\d{3})\s+error/i,      // 429 error
+  ];
+  
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      const status = parseInt(match[1], 10);
+      if (status >= 100 && status < 600) {
+        return status;
+      }
+    }
+  }
+  
+  return undefined;
+}
+
+/**
+ * Classify an error into a FallbackErrorType
+ * 
+ * @param error - The error to classify
+ * @returns The error type classification
+ */
+export function classifyError(error: unknown): FallbackErrorType {
+  if (!(error instanceof Error)) return 'unknown';
+  
+  const message = error.message.toLowerCase();
+  const httpStatus = extractHttpStatus(error);
+  
+  // Check by HTTP status first
+  if (httpStatus) {
+    switch (httpStatus) {
+      case 429: return 'rate_limit';
+      case 403: return 'forbidden';
+      case 401: return 'auth_error';
+      case 404: return 'not_found';
+      case 500:
+      case 502:
+      case 503:
+      case 504: return 'server_error';
+    }
+  }
+  
+  // Check by message patterns
+  if (isRateLimitError(error)) return 'rate_limit';
+  
+  if (message.includes('timeout') || message.includes('timed out')) {
+    return 'timeout';
+  }
+  
+  if (message.includes('context') && (message.includes('length') || message.includes('too long') || message.includes('exceed'))) {
+    return 'context_length';
+  }
+  
+  if (message.includes('auth') || message.includes('unauthorized') || message.includes('invalid key') || message.includes('invalid token')) {
+    return 'auth_error';
+  }
+  
+  if (message.includes('not found') || message.includes('does not exist') || message.includes('unknown model')) {
+    return 'not_found';
+  }
+  
+  if (message.includes('internal') || message.includes('server error') || message.includes('unavailable')) {
+    return 'server_error';
+  }
+  
+  return 'unknown';
+}
+
+/**
+ * Get a human-readable description of an error type
+ */
+export function getErrorTypeDescription(errorType: FallbackErrorType): string {
+  switch (errorType) {
+    case 'rate_limit': return 'Rate Limited';
+    case 'forbidden': return 'Access Denied';
+    case 'server_error': return 'Server Error';
+    case 'timeout': return 'Timeout';
+    case 'auth_error': return 'Auth Error';
+    case 'not_found': return 'Not Found';
+    case 'context_length': return 'Context Too Long';
+    case 'unknown': return 'Error';
+  }
+}
+
+/**
+ * Format a duration in milliseconds to a human-readable string
+ */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const secs = Math.round(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  const remainingSecs = secs % 60;
+  return remainingSecs > 0 ? `${mins}m ${remainingSecs}s` : `${mins}m`;
+}
+
+/**
  * Cooldown entry storing when a model will be available again
  */
 interface CooldownEntry {
@@ -170,11 +304,15 @@ export class FallbackManager {
   private fallbackModels: string[];
   private cooldownMs: number;
   private enabled: boolean;
+  private verbose: boolean;
+  private quiet: boolean;
   
   constructor(options: FallbackOptions = {}) {
     this.fallbackModels = options.fallbackModels ?? DEFAULT_FALLBACK_MODELS;
     this.cooldownMs = options.cooldownMs ?? DEFAULT_COOLDOWN_MS;
     this.enabled = options.enabled ?? true;
+    this.verbose = options.verbose ?? false;
+    this.quiet = options.quiet ?? false;
   }
   
   /**
@@ -341,33 +479,54 @@ export class FallbackManager {
     
     const modelQueue = this.buildModelQueue(primaryModel);
     const attempts: FallbackAttempt[] = [];
+    const totalModels = modelQueue.length;
     
-    logger?.debug('Fallback queue built', { 
-      primary: primaryModel, 
-      queue: modelQueue.join(', '),
-      cooldowns: this.cooldownMap.size,
-    });
+    // Log queue info in verbose mode
+    if (this.verbose && !this.quiet) {
+      logger?.debug(`Fallback queue: [${modelQueue.join(' → ')}] (${totalModels} models)`);
+      
+      // Show any models on cooldown
+      const cooldownStatus = this.getCooldownStatus();
+      if (cooldownStatus.size > 0) {
+        for (const [model, status] of cooldownStatus) {
+          logger?.debug(`  ⏳ ${model} on cooldown (${formatDuration(status.remainingMs)} remaining)`);
+        }
+      }
+    }
     
-    for (const model of modelQueue) {
+    for (let i = 0; i < modelQueue.length; i++) {
+      const model = modelQueue[i];
+      const attemptNum = i + 1;
       const startTime = Date.now();
       const isFallback = model !== primaryModel;
+      const progress = `[${attemptNum}/${totalModels}]`;
       
-      if (isFallback) {
-        logger?.info(`Trying fallback model: ${model}`);
+      // Log attempt start (only if not quiet)
+      if (!this.quiet) {
+        if (isFallback) {
+          logger?.info(`${progress} Trying fallback: ${this.formatModelName(model)}`);
+        } else if (this.verbose) {
+          logger?.debug(`${progress} Trying primary: ${this.formatModelName(model)}`);
+        }
       }
       
       try {
         const result = await operation(model);
+        const durationMs = Date.now() - startTime;
         
-        // Success! If this was a fallback, log it
-        if (isFallback) {
-          logger?.info(`Fallback model succeeded: ${model}`);
+        // Success! Log it (unless quiet)
+        if (!this.quiet) {
+          if (isFallback) {
+            logger?.info(`${progress} ✓ Fallback succeeded: ${this.formatModelName(model)} (${formatDuration(durationMs)})`);
+          } else if (this.verbose) {
+            logger?.debug(`${progress} ✓ Primary succeeded: ${this.formatModelName(model)} (${formatDuration(durationMs)})`);
+          }
         }
         
         attempts.push({
           model,
           success: true,
-          durationMs: Date.now() - startTime,
+          durationMs,
         });
         
         return {
@@ -378,26 +537,43 @@ export class FallbackManager {
         };
       } catch (error) {
         const durationMs = Date.now() - startTime;
-        const isRateLimit = isRateLimitError(error);
+        const errorType = classifyError(error);
+        const httpStatus = extractHttpStatus(error);
         const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorDesc = getErrorTypeDescription(errorType);
+        
+        // Should we add to cooldown?
+        const shouldCooldown = errorType === 'rate_limit' || errorType === 'forbidden' || errorType === 'server_error';
         
         attempts.push({
           model,
           success: false,
           error: errorMessage,
-          isRateLimit,
+          errorType,
+          httpStatus,
+          isRateLimit: errorType === 'rate_limit',
           durationMs,
         });
         
-        if (isRateLimit) {
-          // Add to cooldown and continue to next model
+        if (shouldCooldown) {
           this.addToCooldown(model, errorMessage);
-          const cooldownSecs = Math.round(this.cooldownMs / 1000);
-          logger?.warn(`Model ${model} rate limited, cooldown ${cooldownSecs}s`);
+          const cooldownRemaining = formatDuration(this.cooldownMs);
+          
+          if (!this.quiet) {
+            const statusStr = httpStatus ? ` (${httpStatus})` : '';
+            logger?.warn(`${progress} ✗ ${this.formatModelName(model)}: ${errorDesc}${statusStr} → cooldown ${cooldownRemaining}`);
+          }
         } else {
-          // Non-rate-limit error - might be a real problem
-          // Still try fallbacks but log it differently
-          logger?.warn(`Model ${model} failed: ${errorMessage}`);
+          // Non-cooldown error - log differently
+          if (!this.quiet) {
+            const statusStr = httpStatus ? ` (${httpStatus})` : '';
+            logger?.warn(`${progress} ✗ ${this.formatModelName(model)}: ${errorDesc}${statusStr}`);
+          }
+          
+          // For verbose mode, also show the full error message
+          if (this.verbose && !this.quiet) {
+            logger?.debug(`  Error details: ${errorMessage.substring(0, 200)}`);
+          }
         }
         
         // Continue to next model in queue
@@ -405,8 +581,20 @@ export class FallbackManager {
     }
     
     // All models exhausted
-    logger?.error('All models exhausted', new FallbackExhaustedError(attempts));
-    throw new FallbackExhaustedError(attempts);
+    const exhaustedError = new FallbackExhaustedError(attempts);
+    logger?.error(`All ${totalModels} models failed`, exhaustedError);
+    throw exhaustedError;
+  }
+  
+  /**
+   * Format a model name for display (truncate long OpenRouter names)
+   */
+  private formatModelName(model: string): string {
+    // Remove 'openrouter:' prefix for cleaner display
+    if (model.startsWith('openrouter:')) {
+      return model.replace('openrouter:', '');
+    }
+    return model;
   }
   
   /**
@@ -429,6 +617,12 @@ export class FallbackManager {
     if (options.enabled !== undefined) {
       this.enabled = options.enabled;
     }
+    if (options.verbose !== undefined) {
+      this.verbose = options.verbose;
+    }
+    if (options.quiet !== undefined) {
+      this.quiet = options.quiet;
+    }
   }
   
   /**
@@ -439,6 +633,8 @@ export class FallbackManager {
       fallbackModels: [...this.fallbackModels],
       cooldownMs: this.cooldownMs,
       enabled: this.enabled,
+      verbose: this.verbose,
+      quiet: this.quiet,
     };
   }
 }
