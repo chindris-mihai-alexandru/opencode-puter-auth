@@ -214,6 +214,11 @@ function getPuterInstance(): PuterProvider {
  * 
  * This is a proxy that lazily creates the provider when first accessed.
  * It requires the PUTER_AUTH_TOKEN environment variable to be set.
+ * 
+ * IMPORTANT: OpenCode's plugin loader iterates through exports and may try to access
+ * properties like `.config` expecting a function. We must explicitly return undefined
+ * for properties that aren't part of the ProviderV3 interface to avoid leaking
+ * internal properties from the underlying provider.
  */
 export const puter: PuterProvider = new Proxy(
   function() {} as unknown as PuterProvider,
@@ -222,6 +227,7 @@ export const puter: PuterProvider = new Proxy(
       return getPuterInstance()(...args);
     },
     get(_target, prop) {
+      // ProviderV3 interface methods
       if (prop === 'languageModel' || prop === 'chat') {
         return (...args: [string, PuterChatSettings?]) => 
           getPuterInstance()[prop](...args);
@@ -234,7 +240,24 @@ export const puter: PuterProvider = new Proxy(
           throw new Error(`Puter does not support ${String(prop).replace('Model', '')} models`);
         };
       }
-      return (getPuterInstance() as any)[prop];
+      
+      // OpenCode plugin loader checks for these - return undefined to avoid errors
+      // The loader expects hooks to have .config() method but we're not a hook
+      if (prop === 'config' || prop === 'event' || prop === 'auth' || prop === 'tool') {
+        return undefined;
+      }
+      
+      // Standard function/object properties that should work normally
+      if (prop === 'name' || prop === 'length' || prop === 'prototype' || 
+          prop === 'call' || prop === 'apply' || prop === 'bind' ||
+          prop === Symbol.toStringTag || prop === Symbol.iterator ||
+          prop === 'then' || prop === 'catch' || prop === 'finally') {
+        return undefined;
+      }
+      
+      // For any other property, return undefined rather than leaking internal state
+      // This prevents errors when OpenCode iterates through exports
+      return undefined;
     },
   }
 );
