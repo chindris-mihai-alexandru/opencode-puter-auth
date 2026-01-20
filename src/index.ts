@@ -36,12 +36,14 @@ export { nullLogger, LogLevel } from './logger.js';
 export type { Logger, LoggerOptions } from './logger.js';
 
 // Fallback Manager exports for automatic model fallback
+// NOTE: FallbackManager and FallbackExhaustedError classes are NOT exported from main entry point
+// because OpenCode's plugin loader calls all exports as functions, causing
+// "cannot call class constructor without new" errors.
+// Users needing direct class access can import from the fallback module directly.
 export { 
-  FallbackManager, 
   getGlobalFallbackManager, 
   resetGlobalFallbackManager,
   isRateLimitError,
-  FallbackExhaustedError,
   DEFAULT_FALLBACK_MODELS,
   DEFAULT_COOLDOWN_MS,
 } from './fallback.js';
@@ -52,11 +54,11 @@ export type {
 } from './fallback.js';
 
 // Account Rotation Manager exports for multi-account support
+// NOTE: AccountRotationManager and AllAccountsOnCooldownError classes are NOT exported
+// from main entry point for the same reason as above.
 export {
-  AccountRotationManager,
   getGlobalAccountRotationManager,
   resetGlobalAccountRotationManager,
-  AllAccountsOnCooldownError,
   DEFAULT_ACCOUNT_COOLDOWN_MS,
 } from './account-rotation.js';
 export type {
