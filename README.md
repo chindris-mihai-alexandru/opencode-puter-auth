@@ -777,10 +777,16 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 Before your first PR can be merged, you'll need to sign our simple Contributor License Agreement (CLA) - just reply to the bot's comment.
 
+### Core Maintainer
+
+| | |
+|---|---|
+| <a href="https://github.com/chindris-mihai-alexandru"><img src="https://avatars.githubusercontent.com/u/12643176?v=4" width="100px;" alt="Mihai Chindris"/></a> | **[Mihai Chindris](https://github.com/chindris-mihai-alexandru)**<br/>Creator & Lead Maintainer |
+
 ### Contributors
 
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-3-orange.svg?style=flat-square)](#contributors)
+[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 Thanks to these wonderful people:
@@ -791,7 +797,6 @@ Thanks to these wonderful people:
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/chindris-mihai-alexandru"><img src="https://avatars.githubusercontent.com/u/12643176?v=4?s=100" width="100px;" alt="Mihai Chindris"/><br /><sub><b>Mihai Chindris</b></sub></a><br /><a href="#code-chindris-mihai-alexandru" title="Code">💻</a> <a href="#doc-chindris-mihai-alexandru" title="Documentation">📖</a> <a href="#maintenance-chindris-mihai-alexandru" title="Maintenance">🚧</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/EldoDebug"><img src="https://avatars.githubusercontent.com/u/75922660?v=4?s=100" width="100px;" alt="EldoDebug"/><br /><sub><b>EldoDebug</b></sub></a><br /><a href="#ideas-EldoDebug" title="Ideas & Feedback">🤔</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/icytz"><img src="https://avatars.githubusercontent.com/u/30925199?v=4?s=100" width="100px;" alt="icytz"/><br /><sub><b>icytz</b></sub></a><br /><a href="#ideas-icytz" title="Ideas & Feedback">🤔</a></td>
     </tr>
