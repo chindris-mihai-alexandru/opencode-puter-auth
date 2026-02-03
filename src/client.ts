@@ -31,16 +31,112 @@ interface ModelCache {
   timestamp: number;
 }
 
+/**
+ * User-app-token cache entry
+ * The user-app-token is required for /drivers/call endpoint
+ * and must be obtained via /auth/get-user-app-token with a specific origin
+ */
+interface UserAppTokenCache {
+  token: string;
+  origin: string;
+  timestamp: number;
+}
+
+// Default origin for CLI apps - must match the Origin header in requests
+const DEFAULT_APP_ORIGIN = 'http://localhost:5500';
+const USER_APP_TOKEN_TTL = 3600000; // 1 hour
+
 export class PuterClient {
   private authToken: string;
   private config: Partial<PuterConfig>;
   private logger: Logger;
   private modelCache: ModelCache | null = null;
+  private userAppTokenCache: UserAppTokenCache | null = null;
+  private appOrigin: string;
 
   constructor(authToken: string, config: Partial<PuterConfig> = {}) {
     this.authToken = authToken;
     this.config = config;
     this.logger = createLoggerFromConfig(config);
+    this.appOrigin = DEFAULT_APP_ORIGIN;
+  }
+
+  /**
+   * Get user-app-token required for /drivers/call endpoint
+   * 
+   * The /drivers/call endpoint requires a user-app-token (not the regular auth token)
+   * which is obtained by calling /auth/get-user-app-token with a specific origin.
+   * The origin must then be included as a header in subsequent /drivers/call requests.
+   * 
+   * This is the key fix for the 403 Forbidden error on /drivers/call.
+   * 
+   * @returns User-app-token for API calls
+   */
+  private async getUserAppToken(): Promise<string> {
+    // Check cache first
+    if (this.userAppTokenCache) {
+      const cacheAge = Date.now() - this.userAppTokenCache.timestamp;
+      if (cacheAge < USER_APP_TOKEN_TTL && this.userAppTokenCache.origin === this.appOrigin) {
+        this.logger.debug('Using cached user-app-token', { age: `${Math.round(cacheAge / 1000)}s` });
+        return this.userAppTokenCache.token;
+      }
+      this.logger.debug('User-app-token cache expired or origin changed');
+    }
+
+    const startTime = Date.now();
+    this.logger.request('POST', '/auth/get-user-app-token', { origin: this.appOrigin });
+
+    try {
+      const response = await fetch(`${this.apiUrl}/auth/get-user-app-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.authToken}`,
+          'Origin': this.appOrigin,
+        },
+        body: JSON.stringify({
+          origin: this.appOrigin,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get user-app-token (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      const token = data.token || data.user_app_token || data;
+      
+      const duration = Date.now() - startTime;
+      this.logger.response(200, 'OK (user-app-token obtained)', duration);
+
+      // Cache the token
+      this.userAppTokenCache = {
+        token: typeof token === 'string' ? token : JSON.stringify(token),
+        origin: this.appOrigin,
+        timestamp: Date.now(),
+      };
+
+      return this.userAppTokenCache.token;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.logger.warn('Failed to get user-app-token, falling back to auth_token', { 
+        duration: `${duration}ms`,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      // Fall back to regular auth token if user-app-token fails
+      return this.authToken;
+    }
+  }
+
+  /**
+   * Invalidate the user-app-token cache
+   */
+  public invalidateUserAppTokenCache(): void {
+    if (this.userAppTokenCache) {
+      this.userAppTokenCache = null;
+      this.logger.debug('User-app-token cache invalidated');
+    }
   }
 
   /**
@@ -94,13 +190,14 @@ export class PuterClient {
   /**
    * Update the auth token
    * 
-   * Note: This invalidates the model cache since models might differ per account.
+   * Note: This invalidates both model and user-app-token caches since they're account-specific.
    */
   public setAuthToken(token: string): void {
     if (this.authToken !== token) {
       this.authToken = token;
       this.modelCache = null; // Invalidate cache on token change
-      this.logger.debug('Auth token updated, cache invalidated');
+      this.userAppTokenCache = null; // Invalidate user-app-token too
+      this.logger.debug('Auth token updated, caches invalidated');
     }
   }
 
@@ -177,6 +274,7 @@ export class PuterClient {
    * 
    * Returns an async generator that yields chunks as they arrive.
    * The initial connection is retried on transient failures.
+   * Uses user-app-token flow to bypass 403 Forbidden errors.
    * 
    * @param messages - Array of chat messages
    * @param options - Chat options (model, temperature, etc.)
@@ -207,6 +305,9 @@ export class PuterClient {
       messages: messages.length,
     });
 
+    // Get user-app-token (required for /drivers/call)
+    const userAppToken = await this.getUserAppToken();
+
     try {
       // Retry the initial connection
       const response = await withRetry(async () => {
@@ -214,6 +315,7 @@ export class PuterClient {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Origin': this.appOrigin,
           },
           body: JSON.stringify({
             interface: 'puter-chat-completion',
@@ -227,13 +329,17 @@ export class PuterClient {
               temperature: options.temperature,
               tools: options.tools,
             },
-            auth_token: this.authToken,
+            auth_token: userAppToken,
           }),
           signal: controller.signal,
         });
 
         if (!res.ok) {
           const errorText = await res.text();
+          // If we get 403, invalidate the user-app-token cache
+          if (res.status === 403) {
+            this.invalidateUserAppTokenCache();
+          }
           throw new Error(`Puter API error (${res.status}): ${errorText}`);
         }
 
@@ -400,6 +506,7 @@ export class PuterClient {
    * Make a generic API request to the drivers endpoint
    * 
    * Includes automatic retry with exponential backoff for transient failures.
+   * Uses user-app-token flow to bypass 403 Forbidden errors.
    * 
    * @param method - API method to call
    * @param args - Arguments to pass to the method
@@ -410,6 +517,9 @@ export class PuterClient {
     method: string,
     args: Record<string, unknown>
   ): Promise<{ result: unknown }> {
+    // Get user-app-token (required for /drivers/call)
+    const userAppToken = await this.getUserAppToken();
+    
     return withRetry(async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -419,19 +529,24 @@ export class PuterClient {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Origin': this.appOrigin,
           },
           body: JSON.stringify({
             interface: 'puter-chat-completion',
             service: 'ai-chat',
             method,
             args,
-            auth_token: this.authToken,
+            auth_token: userAppToken,
           }),
           signal: controller.signal,
         });
 
         if (!response.ok) {
           const errorText = await response.text();
+          // If we get 403, invalidate the user-app-token cache and retry
+          if (response.status === 403) {
+            this.invalidateUserAppTokenCache();
+          }
           throw new Error(`Puter API error (${response.status}): ${errorText}`);
         }
 
