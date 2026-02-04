@@ -177,18 +177,23 @@ async function handleChat(args: unknown): Promise<string> {
     // Handle case where content is an array of parts (e.g. OpenAI format)
     if (Array.isArray(content)) {
       content = content
-        .map((part: any) => part.text || '')
+        .map((part: any) => {
+          if (typeof part === 'string') return part;
+          if (part?.text) return part.text;
+          return JSON.stringify(part);
+        })
         .join('');
     }
     
+    // Ensure content is a string
+    content = String(content);
+
     log.info(`Chat response: ${content.length} chars`);
 
     return content;
   } catch (error) {
     log.error('Chat failed', error);
-    return JSON.stringify({
-      error: error instanceof Error ? error.message : 'Chat request failed',
-    });
+    return `Error: ${error instanceof Error ? error.message : 'Chat request failed'}`;
   }
 }
 
@@ -335,8 +340,11 @@ function createServer(): Server {
           };
       }
 
+      // Ensure result is a string
+      const textContent = typeof result === 'string' ? result : JSON.stringify(result);
+
       return {
-        content: [{ type: 'text', text: result }],
+        content: [{ type: 'text', text: textContent }],
       };
     } catch (error) {
       log.error(`Tool ${name} failed`, error);
@@ -385,6 +393,12 @@ export async function startMcpServer(): Promise<void> {
 // Run if executed directly
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 if (isMainModule) {
+  // Parse simple command line args
+  const args = process.argv.slice(2);
+  if (args.includes('--debug')) {
+    process.env.DEBUG = '1';
+  }
+  
   startMcpServer().catch((error) => {
     log.error('Failed to start server', error);
     process.exit(1);
