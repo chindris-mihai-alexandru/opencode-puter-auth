@@ -172,7 +172,15 @@ async function handleChat(args: unknown): Promise<string> {
       max_tokens: input.max_tokens || 4096,
     });
 
-    const content = response.message?.content || '';
+    let content = response.message?.content || '';
+    
+    // Handle case where content is an array of parts (e.g. OpenAI format)
+    if (Array.isArray(content)) {
+      content = content
+        .map((part: any) => part.text || '')
+        .join('');
+    }
+    
     log.info(`Chat response: ${content.length} chars`);
 
     return content;
