@@ -26,3 +26,5 @@ pattern = ".claude/**"
 
 [[exclude_patterns]]
 pattern = "test/**"
+
+# Trigger DeepSource re-analysis
